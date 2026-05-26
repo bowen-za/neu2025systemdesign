@@ -50,7 +50,7 @@ bool FileSystem::removeNode(const std::string& path) {
     }
     for (const auto& open : openFiles_) {
         if (open.used && open.inodeNo == it->inode) {
-            std::cout << "文件仍处于打开状态，无法删除。\n";
+            std::cout << "文件仍处打开状态，无法删除。\n";
             return false;
         }
     }
