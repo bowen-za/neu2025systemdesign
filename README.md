@@ -67,7 +67,10 @@
 - [vfs.h](./vfs.h)：公共头文件，包含常量、数据结构和类声明
 - [utils.cpp](./utils.cpp)：字符串工具、控制台编码、用户会话初始化
 - [virtual_disk.cpp](./virtual_disk.cpp)：虚拟磁盘文件的读写与块操作
-- [filesystem.cpp](./filesystem.cpp)：文件系统核心逻辑
+- [filesystem_system.cpp](./filesystem_system.cpp)：系统初始化、格式化、超级块、空闲块和 inode 管理
+- [filesystem_user.cpp](./filesystem_user.cpp)：用户登录、注销、家目录定位和权限判断
+- [filesystem_directory.cpp](./filesystem_directory.cpp)：目录项读写、路径解析、创建目录、切换目录和列目录
+- [filesystem_file.cpp](./filesystem_file.cpp)：文件创建、打开、读写、关闭和删除
 - [CMakeLists.txt](./CMakeLists.txt)：CMake 构建配置
 
 ## 虚拟磁盘说明
