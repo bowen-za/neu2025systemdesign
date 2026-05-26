@@ -71,6 +71,10 @@
 - [filesystem_user.cpp](./filesystem_user.cpp)：用户登录、注销、家目录定位和权限判断
 - [filesystem_directory.cpp](./filesystem_directory.cpp)：目录项读写、路径解析、创建目录、切换目录和列目录
 - [filesystem_file.cpp](./filesystem_file.cpp)：文件创建、打开、读写、关闭和删除
+- [filesystem_api.cpp](./filesystem_api.cpp)：给图形界面调用的文件系统 API 封装
+- [qt_main.cpp](./qt_main.cpp)：Qt 图形界面程序入口
+- [qt_mainwindow.h](./qt_mainwindow.h)：Qt 主窗口声明
+- [qt_mainwindow.cpp](./qt_mainwindow.cpp)：仿 Windows 文件管理器风格的图形界面实现
 - [CMakeLists.txt](./CMakeLists.txt)：CMake 构建配置
 
 ## 虚拟磁盘说明
@@ -89,6 +93,14 @@ cmake --build build
 ```
 
 生成的可执行文件会在 `build` 目录中。
+
+如果本机安装了 Qt5 或 Qt6 Widgets，CMake 会额外生成图形版目标：
+
+```bash
+cmake --build build --target vfs_unix_simulator_qt
+```
+
+图形版界面模仿 Windows 文件管理器布局，包含用户登录区、文件列表、路径栏、工具栏、打开文件 fd 列表、文件内容编辑区和操作日志。
 
 ### 直接运行
 

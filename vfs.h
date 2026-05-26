@@ -131,6 +131,14 @@ struct UserSession {
     UserSession();
 };
 
+struct DirectoryViewItem {
+    std::string name;
+    std::uint32_t inodeNo = 0;
+    std::uint32_t size = 0;
+    std::uint16_t permissions = 0;
+    InodeType type = InodeType::Free;
+};
+
 std::string trim(const std::string& input);
 bool splitParent(const std::string& path, std::string& parent, std::string& leaf);
 void copyName(char* dest, const std::string& name);
@@ -169,6 +177,22 @@ public:
     bool initialize();
     bool format();
     void run();
+
+    bool isLoggedIn() const;
+    std::string currentUserName() const;
+    std::string currentDirectoryPath() const;
+    bool loginUser(const std::string& username, const std::string& password, std::string& message);
+    bool logoutUser(std::string& message);
+    bool createFileAt(const std::string& path, std::string& message);
+    bool createDirectoryAt(const std::string& path, std::string& message);
+    bool deleteAt(const std::string& path, std::string& message);
+    bool changeDirectoryTo(const std::string& path, std::string& message);
+    std::vector<DirectoryViewItem> listDirectoryAt(const std::string& path, std::string& message) const;
+    bool openFileAt(const std::string& path, OpenMode mode, int& fd, std::string& message);
+    bool closeDescriptor(int fd, std::string& message);
+    bool writeDescriptor(int fd, const std::string& text, std::string& message);
+    bool readDescriptor(int fd, std::string& content, std::string& message);
+    bool save(std::string& message);
 
 private:
     void initializeUsers();
