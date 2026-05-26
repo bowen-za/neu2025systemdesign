@@ -9,5 +9,8 @@ add_executable(vfs_unix_simulator
     main.cpp
     utils.cpp
     virtual_disk.cpp
-    filesystem.cpp
+    filesystem_system.cpp
+    filesystem_user.cpp
+    filesystem_directory.cpp
+    filesystem_file.cpp
 )
