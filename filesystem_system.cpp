@@ -164,8 +164,8 @@ void FileSystem::initializeUsers() {
     users_.resize(kUserCount);
 
     UserRecord admin{};
-    std::strncpy(admin.username, "admin", sizeof(admin.username) - 1);
-    std::strncpy(admin.password, "admin123", sizeof(admin.password) - 1);
+    strncpy(admin.username, "admin", sizeof(admin.username) - 1);
+    strncpy(admin.password, "admin123", sizeof(admin.password) - 1);
     admin.uid = 0;
     admin.gid = 0;
     admin.isAdmin = 1;
@@ -175,8 +175,8 @@ void FileSystem::initializeUsers() {
         UserRecord record{};
         const std::string username = "usr" + std::to_string(i);
         const std::string password = "pass" + std::to_string(i);
-        std::strncpy(record.username, username.c_str(), sizeof(record.username) - 1);
-        std::strncpy(record.password, password.c_str(), sizeof(record.password) - 1);
+        strncpy(record.username, username.c_str(), sizeof(record.username) - 1);
+        strncpy(record.password, password.c_str(), sizeof(record.password) - 1);
         record.uid = static_cast<std::uint16_t>(i);
         record.gid = static_cast<std::uint16_t>(i);
         record.isAdmin = 0;
@@ -423,7 +423,7 @@ void FileSystem::shutdown() {
     flushSuper();
     disk_.sync();
     std::cout << "文件系统状态已保存到 " << kDiskFileName << "。\n";
-    std::cout << "默认账户: admin/admin123, usr1~usr15/pass1~pass15。\n";
+    std::cout << "默认账户: admin/admin123, usr1~usr7/pass1~pass7。\n";
 }
 
 }  // namespace vfs

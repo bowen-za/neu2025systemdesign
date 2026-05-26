@@ -20,7 +20,7 @@ constexpr std::uint32_t kDataStartBlock = kInodeStartBlock + kInodeBlocks;
 constexpr std::uint32_t kTotalBlocks = kDataStartBlock + kDataBlocks;
 constexpr std::uint32_t kMagic = 0x56465331;
 
-constexpr std::uint32_t kUserCount = 16;
+constexpr std::uint32_t kUserCount = 8;
 constexpr std::uint32_t kNicFree = 50;
 constexpr std::uint32_t kNicInode = 50;
 constexpr std::uint32_t kNAddr = 10;

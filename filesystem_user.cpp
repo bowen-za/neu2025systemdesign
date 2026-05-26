@@ -1,5 +1,6 @@
 ﻿#include "vfs.h"
 
+#include <cstring>
 #include <iostream>
 
 namespace vfs {
@@ -155,8 +156,8 @@ void FileSystem::registerUser() {
     }
 
     UserRecord newUser{};
-    std::strncpy(newUser.username, username.c_str(), sizeof(newUser.username) - 1);
-    std::strncpy(newUser.password, password.c_str(), sizeof(newUser.password) - 1);
+    strncpy(newUser.username, username.c_str(), sizeof(newUser.username) - 1);
+    strncpy(newUser.password, password.c_str(), sizeof(newUser.password) - 1);
     newUser.uid = static_cast<std::uint16_t>(freeIndex);
     newUser.gid = static_cast<std::uint16_t>(freeIndex);
     newUser.isAdmin = 0;
