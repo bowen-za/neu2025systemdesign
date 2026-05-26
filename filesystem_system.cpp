@@ -111,36 +111,42 @@ void FileSystem::run() {
             login();
             break;
         case 3:
-            logout();
+            adminLogin();
             break;
         case 4:
-            createFile();
+            registerUser();
             break;
         case 5:
-            openFile();
+            logout();
             break;
         case 6:
-            writeFile();
+            createFile();
             break;
         case 7:
-            readFile();
+            openFile();
             break;
         case 8:
-            closeFile();
+            writeFile();
             break;
         case 9:
-            deleteFile();
+            readFile();
             break;
         case 10:
-            makeDirectory();
+            closeFile();
             break;
         case 11:
-            changeDirectory();
+            deleteFile();
             break;
         case 12:
-            listDirectory();
+            makeDirectory();
             break;
         case 13:
+            changeDirectory();
+            break;
+        case 14:
+            listDirectory();
+            break;
+        case 15:
             running = false;
             shutdown();
             break;
@@ -157,14 +163,23 @@ void FileSystem::initializeUsers() {
     users_.clear();
     users_.resize(kUserCount);
 
-    for (std::uint32_t i = 0; i < kUserCount; ++i) {
+    UserRecord admin{};
+    std::strncpy(admin.username, "admin", sizeof(admin.username) - 1);
+    std::strncpy(admin.password, "admin123", sizeof(admin.password) - 1);
+    admin.uid = 0;
+    admin.gid = 0;
+    admin.isAdmin = 1;
+    users_[0] = admin;
+
+    for (std::uint32_t i = 1; i < kUserCount; ++i) {
         UserRecord record{};
-        const std::string username = "usr" + std::to_string(i + 1);
-        const std::string password = "pass" + std::to_string(i + 1);
+        const std::string username = "usr" + std::to_string(i);
+        const std::string password = "pass" + std::to_string(i);
         std::strncpy(record.username, username.c_str(), sizeof(record.username) - 1);
         std::strncpy(record.password, password.c_str(), sizeof(record.password) - 1);
-        record.uid = static_cast<std::uint16_t>(i + 1);
-        record.gid = static_cast<std::uint16_t>(i + 1);
+        record.uid = static_cast<std::uint16_t>(i);
+        record.gid = static_cast<std::uint16_t>(i);
+        record.isAdmin = 0;
         users_[i] = record;
     }
 }
@@ -184,6 +199,9 @@ void FileSystem::createUserHomes() {
 
     for (const auto& user : users_) {
         const std::string username = readName(user.username, sizeof(user.username));
+        if (username == "admin") {
+            continue;
+        }
         const int inodeNo = ialloc();
         const int blockNo = ballocInternal();
         if (inodeNo < 0 || blockNo < 0) {
@@ -364,13 +382,17 @@ void FileSystem::iput(MemInode* inode) {
 
 void FileSystem::printMenu() const {
     std::cout << "==== 模拟 UNIX 文件系统 ====\n";
-    std::cout << "当前用户: " << (session_.loggedIn ? session_.username : "(未登录)") << '\n';
+    std::cout << "当前用户: " << (session_.loggedIn ? session_.username : "(未登录)");
+    if (session_.loggedIn && session_.isAdmin) {
+        std::cout << " [管理员]";
+    }
+    std::cout << '\n';
     std::cout << "当前目录: " << currentPath() << '\n';
-    std::cout << "1. format      2. login       3. logout\n";
-    std::cout << "4. create      5. open        6. write\n";
-    std::cout << "7. read        8. close       9. delete\n";
-    std::cout << "10. mkdir      11. chdir      12. dir\n";
-    std::cout << "13. exit\n";
+    std::cout << "1. format      2. login       3. admin\n";
+    std::cout << "4. register    5. logout      6. create\n";
+    std::cout << "7. open        8. write       9. read\n";
+    std::cout << "10. close      11. delete      12. mkdir\n";
+    std::cout << "13. chdir      14. dir         15. exit\n";
 }
 
 int FileSystem::readInt(const std::string& prompt) const {
@@ -401,7 +423,7 @@ void FileSystem::shutdown() {
     flushSuper();
     disk_.sync();
     std::cout << "文件系统状态已保存到 " << kDiskFileName << "。\n";
-    std::cout << "默认账户: usr1~usr8，默认密码: pass1~pass8。\n";
+    std::cout << "默认账户: admin/admin123, usr1~usr15/pass1~pass15。\n";
 }
 
 }  // namespace vfs

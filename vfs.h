@@ -20,7 +20,7 @@ constexpr std::uint32_t kDataStartBlock = kInodeStartBlock + kInodeBlocks;
 constexpr std::uint32_t kTotalBlocks = kDataStartBlock + kDataBlocks;
 constexpr std::uint32_t kMagic = 0x56465331;
 
-constexpr std::uint32_t kUserCount = 8;
+constexpr std::uint32_t kUserCount = 16;
 constexpr std::uint32_t kNicFree = 50;
 constexpr std::uint32_t kNicInode = 50;
 constexpr std::uint32_t kNAddr = 10;
@@ -52,7 +52,8 @@ struct UserRecord {
     char password[16];
     std::uint16_t uid;
     std::uint16_t gid;
-    std::uint8_t reserved[28];
+    std::uint8_t isAdmin;
+    std::uint8_t reserved[27];
 };
 
 struct GroupBlock {
@@ -124,6 +125,7 @@ struct UserSession {
     std::uint16_t uid = 0;
     std::uint16_t gid = 0;
     std::string username;
+    bool isAdmin = false;
     std::uint32_t cwdInode = kRootInode;
     std::uint32_t homeInode = kRootInode;
     std::array<int, kUserOpenMax> openFiles{};
@@ -211,6 +213,8 @@ private:
 
     void login();
     void logout();
+    void registerUser();
+    void adminLogin();
     void createFile();
     void makeDirectory();
     void deleteFile();
