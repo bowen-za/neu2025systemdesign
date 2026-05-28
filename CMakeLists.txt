@@ -5,8 +5,17 @@ set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+find_package(Qt6 COMPONENTS Widgets QUIET)
+if(Qt6_FOUND)
+    set(QT_LIB_TARGET Qt6::Widgets)
+elseif(NOT Qt6_FOUND)
+    find_package(Qt5 REQUIRED COMPONENTS Widgets)
+    set(QT_LIB_TARGET Qt5::Widgets)
+endif()
+
 add_executable(vfs_unix_simulator
-    main.cpp
+    qt_main.cpp
+    qt_mainwindow.cpp
     utils.cpp
     virtual_disk.cpp
     filesystem_system.cpp
@@ -16,21 +25,4 @@ add_executable(vfs_unix_simulator
     filesystem_api.cpp
 )
 
-find_package(QT NAMES Qt6 Qt5 COMPONENTS Widgets QUIET)
-if(QT_FOUND)
-    find_package(Qt${QT_VERSION_MAJOR} COMPONENTS Widgets QUIET)
-endif()
-if(QT_FOUND AND Qt${QT_VERSION_MAJOR}_FOUND)
-    add_executable(vfs_unix_simulator_qt
-        qt_main.cpp
-        qt_mainwindow.cpp
-        utils.cpp
-        virtual_disk.cpp
-        filesystem_system.cpp
-        filesystem_user.cpp
-        filesystem_directory.cpp
-        filesystem_file.cpp
-        filesystem_api.cpp
-    )
-    target_link_libraries(vfs_unix_simulator_qt PRIVATE Qt${QT_VERSION_MAJOR}::Widgets)
-endif()
+target_link_libraries(vfs_unix_simulator PRIVATE ${QT_LIB_TARGET})

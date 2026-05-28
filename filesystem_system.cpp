@@ -96,63 +96,6 @@ bool FileSystem::format() {
     return true;
 }
 
-void FileSystem::run() {
-    bool running = true;
-    while (running) {
-        printMenu();
-        const int choice = readInt("请选择功能: ");
-        std::cout << '\n';
-
-        switch (choice) {
-        case 1:
-            format();
-            break;
-        case 2:
-            login();
-            break;
-        case 3:
-            logout();
-            break;
-        case 4:
-            createFile();
-            break;
-        case 5:
-            openFile();
-            break;
-        case 6:
-            writeFile();
-            break;
-        case 7:
-            readFile();
-            break;
-        case 8:
-            closeFile();
-            break;
-        case 9:
-            deleteFile();
-            break;
-        case 10:
-            makeDirectory();
-            break;
-        case 11:
-            changeDirectory();
-            break;
-        case 12:
-            listDirectory();
-            break;
-        case 13:
-            running = false;
-            shutdown();
-            break;
-        default:
-            std::cout << "无效选项，请重新输入。\n";
-            break;
-        }
-
-        std::cout << '\n';
-    }
-}
-
 void FileSystem::initializeUsers() {
     users_.clear();
     users_.resize(kUserCount);
@@ -361,47 +304,5 @@ void FileSystem::iput(MemInode* inode) {
     }
 }
 
-
-void FileSystem::printMenu() const {
-    std::cout << "==== 模拟 UNIX 文件系统 ====\n";
-    std::cout << "当前用户: " << (session_.loggedIn ? session_.username : "(未登录)") << '\n';
-    std::cout << "当前目录: " << currentPath() << '\n';
-    std::cout << "1. format      2. login       3. logout\n";
-    std::cout << "4. create      5. open        6. write\n";
-    std::cout << "7. read        8. close       9. delete\n";
-    std::cout << "10. mkdir      11. chdir      12. dir\n";
-    std::cout << "13. exit\n";
-}
-
-int FileSystem::readInt(const std::string& prompt) const {
-    while (true) {
-        std::cout << prompt;
-        std::string line;
-        if (!std::getline(std::cin, line)) {
-            return 13;
-        }
-
-        std::stringstream ss(line);
-        int value = 0;
-        if (ss >> value) {
-            return value;
-        }
-        std::cout << "请输入数字。\n";
-    }
-}
-
-std::string FileSystem::readLine(const std::string& prompt) const {
-    std::cout << prompt;
-    std::string line;
-    std::getline(std::cin, line);
-    return trim(line);
-}
-
-void FileSystem::shutdown() {
-    flushSuper();
-    disk_.sync();
-    std::cout << "文件系统状态已保存到 " << kDiskFileName << "。\n";
-    std::cout << "默认账户: usr1~usr8，默认密码: pass1~pass8。\n";
-}
 
 }  // namespace vfs

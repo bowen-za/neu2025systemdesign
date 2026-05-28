@@ -145,7 +145,6 @@ std::uint32_t FileSystem::resolvePath(const std::string& path) const {
 }
 
 bool FileSystem::createNode(const std::string& path, InodeType type) {
-    ensureLoggedIn();
     if (!session_.loggedIn) {
         return false;
     }
@@ -229,72 +228,6 @@ bool FileSystem::createNode(const std::string& path, InodeType type) {
     disk_.sync();
     std::cout << (type == InodeType::Directory ? "目录" : "文件") << "创建成功。\n";
     return true;
-}
-
-void FileSystem::makeDirectory() {
-    createNode(readLine("请输入待创建目录路径: "), InodeType::Directory);
-}
-
-void FileSystem::changeDirectory() {
-    ensureLoggedIn();
-    if (!session_.loggedIn) {
-        return;
-    }
-
-    const std::uint32_t inodeNo = resolvePath(readLine("请输入目标目录路径: "));
-    if (inodeNo == kInvalidInode) {
-        std::cout << "路径不存在。\n";
-        return;
-    }
-
-    const DiskInode inode = readInode(inodeNo);
-    if (inode.type != static_cast<std::uint8_t>(InodeType::Directory)) {
-        std::cout << "目标不是目录。\n";
-        return;
-    }
-    if (!accessAllowed(inode, true, false)) {
-        std::cout << "没有进入该目录的权限。\n";
-        return;
-    }
-
-    session_.cwdInode = inodeNo;
-    std::cout << "当前目录已切换到 " << currentPath() << "。\n";
-}
-
-void FileSystem::listDirectory() {
-    ensureLoggedIn();
-    if (!session_.loggedIn) {
-        return;
-    }
-
-    const std::string path = readLine("请输入目录路径(直接回车表示当前目录): ");
-    const std::uint32_t inodeNo = resolvePath(path.empty() ? "." : path);
-    if (inodeNo == kInvalidInode) {
-        std::cout << "目录不存在。\n";
-        return;
-    }
-
-    const DiskInode inode = readInode(inodeNo);
-    if (inode.type != static_cast<std::uint8_t>(InodeType::Directory)) {
-        std::cout << "目标不是目录。\n";
-        return;
-    }
-    if (!accessAllowed(inode, true, false)) {
-        std::cout << "没有读取目录的权限。\n";
-        return;
-    }
-
-    std::vector<DirEntry> entries;
-    readDirectoryEntries(inodeNo, entries);
-    std::cout << std::left << std::setw(10) << "类型" << std::setw(18) << "名称"
-              << std::setw(8) << "inode" << std::setw(8) << "大小" << "权限\n";
-    for (const auto& entry : entries) {
-        const DiskInode child = readInode(entry.inode);
-        std::cout << std::left << std::setw(10)
-                  << (child.type == static_cast<std::uint8_t>(InodeType::Directory) ? "DIR" : "FILE")
-                  << std::setw(18) << readName(entry.name, kNameSize) << std::setw(8) << entry.inode
-                  << std::setw(8) << child.size << std::oct << child.permissions << std::dec << '\n';
-    }
 }
 
 std::string FileSystem::currentPath() const {
