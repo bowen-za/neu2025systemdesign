@@ -176,7 +176,6 @@ class FileSystem {
 public:
     bool initialize();
     bool format();
-    void run();
 
     bool isLoggedIn() const;
     std::string currentUserName() const;
@@ -226,28 +225,11 @@ private:
     bool removeNode(const std::string& path);
     int allocateSystemOpen(OpenMode mode, std::uint32_t inodeNo, std::uint32_t offset);
     int allocateUserFd(int sysIndex);
-    void ensureLoggedIn() const;
-    void printMenu() const;
-    int readInt(const std::string& prompt) const;
-    std::string readLine(const std::string& prompt) const;
     std::string currentPath() const;
     std::string findNameInParent(std::uint32_t parentInode, std::uint32_t childInode) const;
-
-    void login();
-    void logout();
-    void createFile();
-    void makeDirectory();
-    void deleteFile();
-    void changeDirectory();
-    void listDirectory();
-    void openFile();
     bool closeFd(int fd, bool verbose);
-    void closeFile();
     bool readFileContent(std::uint32_t inodeNo, std::vector<char>& content) const;
     bool writeFileContent(std::uint32_t inodeNo, const std::vector<char>& content);
-    void writeFile();
-    void readFile();
-    void shutdown();
 
     VirtualDisk disk_;
     SuperBlock super_{};

@@ -1,6 +1,13 @@
 # Build outputs
 build/
+build-*/
+out/
 cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+compile_commands.json
 *.o
 *.obj
 *.exe
@@ -10,10 +17,13 @@ cmake-build-*/
 
 # Virtual disk / runtime data
 virtual_disk.bin
+*.bin
 
 # IDE / editor files
 .vscode/
 .idea/
+.qtcreator/
+.qtc_clangd/
 *.user
 *.suo
 *.cache
