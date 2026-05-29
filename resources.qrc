@@ -1,0 +1,6 @@
+<RCC>
+    <qresource prefix="/assets">
+        <file>assets/bysx_os_icon.png</file>
+        <file>assets/bysx_os_wallpaper.png</file>
+    </qresource>
+</RCC>

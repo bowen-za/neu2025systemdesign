@@ -4,6 +4,7 @@ project(vfs_unix_simulator LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_AUTORCC ON)
 
 find_package(Qt6 COMPONENTS Widgets QUIET)
 if(Qt6_FOUND)
@@ -23,6 +24,7 @@ add_executable(vfs_unix_simulator
     filesystem_directory.cpp
     filesystem_file.cpp
     filesystem_api.cpp
+    resources.qrc
 )
 
 target_link_libraries(vfs_unix_simulator PRIVATE ${QT_LIB_TARGET})
