@@ -1,4 +1,4 @@
-﻿#include "vfs.h"
+#include "vfs.h"
 
 #include <cstring>
 #include <iostream>
@@ -113,12 +113,26 @@ void FileSystem::initializeUsers() {
 }
 
 void FileSystem::loadUsers() {
-    users_.resize(kUserCount);
-    disk_.readBytes(kBootBlock * kBlockSize, users_.data(), sizeof(UserRecord) * kUserCount);
+    const std::uint32_t count = (super_.userCount > 0 && super_.userCount <= kMaxUserCount)
+        ? super_.userCount : kUserCount;
+    users_.resize(count);
+    const std::uint32_t readBytes = sizeof(UserRecord) * count;
+    const std::uint32_t userAreaSize = kUserBlocks * kBlockSize;
+    const std::uint32_t readSize = (readBytes < userAreaSize) ? readBytes : userAreaSize;
+    disk_.readBytes(kBootBlock * kBlockSize, users_.data(), readSize);
 }
 
 void FileSystem::writeUsers() {
-    disk_.writeBytes(kBootBlock * kBlockSize, users_.data(), sizeof(UserRecord) * kUserCount);
+    const std::uint32_t writeBytes = sizeof(UserRecord) * users_.size();
+    const std::uint32_t userAreaSize = kUserBlocks * kBlockSize;
+    const std::uint32_t writeSize = (writeBytes < userAreaSize) ? writeBytes : userAreaSize;
+    disk_.writeBytes(kBootBlock * kBlockSize, users_.data(), writeSize);
+    const std::uint32_t usedBlocks = (writeSize + kBlockSize - 1) / kBlockSize;
+    for (std::uint32_t b = kBootBlock + usedBlocks; b < kSuperBlockNo; ++b) {
+        disk_.zeroBlock(b);
+    }
+    super_.userCount = static_cast<std::uint32_t>(users_.size());
+    flushSuper();
 }
 
 void FileSystem::createUserHomes() {

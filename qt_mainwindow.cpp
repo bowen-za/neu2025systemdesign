@@ -1,10 +1,14 @@
 #include "qt_mainwindow.h"
 
+#include <algorithm>
+#include <limits>
+#include <QAbstractItemView>
 #include <QAction>
 #include <QApplication>
 #include <QComboBox>
 #include <QDialog>
 #include <QDialogButtonBox>
+#include <QDropEvent>
 #include <QFrame>
 #include <QGridLayout>
 #include <QHBoxLayout>
@@ -58,6 +62,45 @@ bool isSpecialEntry(const QString& name) {
 }
 
 }  // namespace
+
+FileListWidget::FileListWidget(QWidget* parent) : QListWidget(parent) {
+}
+
+void FileListWidget::setDirectoryPath(const QString& path) {
+    directoryPath_ = path;
+}
+
+QString FileListWidget::directoryPath() const {
+    return directoryPath_;
+}
+
+void FileListWidget::dropEvent(QDropEvent* event) {
+    const QPoint dropPos = event->position().toPoint();
+    QListWidgetItem* targetItem = itemAt(dropPos);
+
+    if (targetItem) {
+        const vfs::InodeType targetType = static_cast<vfs::InodeType>(
+            targetItem->data(Qt::UserRole + 1).toInt());
+
+        const QList<QListWidgetItem*> selected = selectedItems();
+        for (auto* item : selected) {
+            if (item == targetItem) {
+                continue;
+            }
+            const vfs::InodeType type = static_cast<vfs::InodeType>(
+                item->data(Qt::UserRole + 1).toInt());
+            if (type == vfs::InodeType::File && targetType == vfs::InodeType::Directory) {
+                emit fileDroppedOnDirectory(
+                    item->data(Qt::UserRole).toString(),
+                    targetItem->data(Qt::UserRole).toString());
+                event->acceptProposedAction();
+                return;
+            }
+        }
+    }
+
+    QListWidget::dropEvent(event);
+}
 
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     fs_.initialize();
@@ -136,14 +179,94 @@ void MainWindow::buildUi() {
     loginBottomLayout->setContentsMargins(0, 0, 0, 0);
     loginBottomLayout->addStretch();
     auto* formatButton = makeButton(QStringLiteral("格式化"), QApplication::style()->standardIcon(QStyle::SP_DriveHDIcon));
+    auto* registerButton = makeButton(QStringLiteral("注册"), QApplication::style()->standardIcon(QStyle::SP_FileDialogNewFolder));
     auto* exitLoginButton = makeButton(QStringLiteral("退出"), QApplication::style()->standardIcon(QStyle::SP_DialogCloseButton));
     loginBottomLayout->addWidget(formatButton);
+    loginBottomLayout->addWidget(registerButton);
     loginBottomLayout->addWidget(exitLoginButton);
 
     loginRoot->addStretch();
     loginRoot->addWidget(loginCenter);
     loginRoot->addStretch();
     loginRoot->addWidget(loginBottom);
+
+    registerPage_ = new QWidget;
+    registerPage_->setObjectName(QStringLiteral("registerPage"));
+    auto* regRoot = new QVBoxLayout(registerPage_);
+    regRoot->setContentsMargins(32, 32, 32, 24);
+
+    auto* regCenter = new QWidget;
+    auto* regCenterLayout = new QHBoxLayout(regCenter);
+    regCenterLayout->addStretch();
+
+    auto* regBox = new QFrame;
+    regBox->setObjectName(QStringLiteral("loginBox"));
+    regBox->setFrameShape(QFrame::StyledPanel);
+    regBox->setMinimumWidth(380);
+    regBox->setMaximumWidth(430);
+
+    auto* regLayout = new QVBoxLayout(regBox);
+    regLayout->setContentsMargins(30, 28, 30, 28);
+    regLayout->setSpacing(12);
+
+    auto* regIcon = new QLabel;
+    regIcon->setAlignment(Qt::AlignCenter);
+    regIcon->setPixmap(QPixmap(QStringLiteral(":/assets/assets/bysx_os_icon.png")).scaled(88, 88, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+
+    auto* regTitle = new QLabel(QStringLiteral("注册新用户"));
+    QFont regTitleFont = regTitle->font();
+    regTitleFont.setPointSize(17);
+    regTitleFont.setBold(true);
+    regTitle->setFont(regTitleFont);
+    regTitle->setAlignment(Qt::AlignCenter);
+
+    auto* regSubtitle = new QLabel(QString::fromUtf8(kLoginSubtitle));
+    regSubtitle->setAlignment(Qt::AlignCenter);
+
+    regUserEdit_ = new QLineEdit;
+    regUserEdit_->setPlaceholderText(QStringLiteral("用户名"));
+    regUserEdit_->setMinimumHeight(34);
+
+    regPasswordEdit_ = new QLineEdit;
+    regPasswordEdit_->setPlaceholderText(QStringLiteral("密码"));
+    regPasswordEdit_->setEchoMode(QLineEdit::Password);
+    regPasswordEdit_->setMinimumHeight(34);
+
+    regConfirmEdit_ = new QLineEdit;
+    regConfirmEdit_->setPlaceholderText(QStringLiteral("确认密码"));
+    regConfirmEdit_->setEchoMode(QLineEdit::Password);
+    regConfirmEdit_->setMinimumHeight(34);
+
+    auto* regSubmitButton = makeButton(QStringLiteral("注册"), QApplication::style()->standardIcon(QStyle::SP_DialogApplyButton));
+    regSubmitButton->setDefault(true);
+
+    regLayout->addWidget(regIcon);
+    regLayout->addWidget(regTitle);
+    regLayout->addWidget(regSubtitle);
+    regLayout->addSpacing(8);
+    regLayout->addWidget(new QLabel(QStringLiteral("用户名")));
+    regLayout->addWidget(regUserEdit_);
+    regLayout->addWidget(new QLabel(QStringLiteral("密码")));
+    regLayout->addWidget(regPasswordEdit_);
+    regLayout->addWidget(new QLabel(QStringLiteral("确认密码")));
+    regLayout->addWidget(regConfirmEdit_);
+    regLayout->addSpacing(8);
+    regLayout->addWidget(regSubmitButton);
+
+    regCenterLayout->addWidget(regBox);
+    regCenterLayout->addStretch();
+
+    auto* regBottom = new QWidget;
+    auto* regBottomLayout = new QHBoxLayout(regBottom);
+    regBottomLayout->setContentsMargins(0, 0, 0, 0);
+    regBottomLayout->addStretch();
+    auto* backToLoginButton = makeButton(QStringLiteral("返回登录"), QApplication::style()->standardIcon(QStyle::SP_ArrowBack));
+    regBottomLayout->addWidget(backToLoginButton);
+
+    regRoot->addStretch();
+    regRoot->addWidget(regCenter);
+    regRoot->addStretch();
+    regRoot->addWidget(regBottom);
 
     mainPage_ = new QWidget;
     mainPage_->setObjectName(QStringLiteral("mainPage"));
@@ -154,12 +277,24 @@ void MainWindow::buildUi() {
     auto* desktopHeader = new QWidget;
     auto* headerLayout = new QHBoxLayout(desktopHeader);
     headerLayout->setContentsMargins(0, 0, 0, 0);
+
+    backButton_ = new QPushButton(QStringLiteral("\u2190"));
+    backButton_->setObjectName(QStringLiteral("backButton"));
+    backButton_->setFixedSize(34, 34);
+    backButton_->setToolTip(QStringLiteral("返回上级目录"));
+
+    pathEdit_ = new QLineEdit;
+    pathEdit_->setObjectName(QStringLiteral("pathEdit"));
+    pathEdit_->setMinimumHeight(32);
+
     userLabel_ = new QLabel;
     userLabel_->setObjectName(QStringLiteral("userLabel"));
-    headerLayout->addStretch();
+
+    headerLayout->addWidget(backButton_);
+    headerLayout->addWidget(pathEdit_, 1);
     headerLayout->addWidget(userLabel_);
 
-    desktopList_ = new QListWidget;
+    desktopList_ = new FileListWidget;
     desktopList_->setObjectName(QStringLiteral("desktopList"));
     desktopList_->setViewMode(QListView::IconMode);
     desktopList_->setIconSize(QSize(48, 48));
@@ -169,6 +304,8 @@ void MainWindow::buildUi() {
     desktopList_->setSelectionMode(QAbstractItemView::SingleSelection);
     desktopList_->setContextMenuPolicy(Qt::CustomContextMenu);
     desktopList_->setWordWrap(true);
+    desktopList_->setDragDropMode(QAbstractItemView::InternalMove);
+    desktopList_->setDefaultDropAction(Qt::MoveAction);
 
     auto* bottomBar = new QWidget;
     auto* bottomLayout = new QHBoxLayout(bottomBar);
@@ -189,10 +326,11 @@ void MainWindow::buildUi() {
     mainRoot->addWidget(bottomBar);
 
     pages_->addWidget(loginPage_);
+    pages_->addWidget(registerPage_);
     pages_->addWidget(mainPage_);
     setCentralWidget(pages_);
     setStyleSheet(QStringLiteral(
-        "#loginPage, #mainPage {"
+        "#loginPage, #registerPage, #mainPage {"
         "  border-image: url(:/assets/assets/bysx_os_wallpaper.png) 0 0 0 0 stretch stretch;"
         "}"
         "#loginBox {"
@@ -205,6 +343,24 @@ void MainWindow::buildUi() {
         "  background: rgba(0, 35, 70, 120);"
         "  padding: 6px 10px;"
         "  border-radius: 6px;"
+        "}"
+        "#backButton {"
+        "  color: white;"
+        "  background: rgba(0, 35, 70, 140);"
+        "  border: 1px solid rgba(255, 255, 255, 80);"
+        "  border-radius: 6px;"
+        "  font-size: 16px;"
+        "  font-weight: bold;"
+        "}"
+        "#backButton:hover {"
+        "  background: rgba(44, 160, 255, 160);"
+        "}"
+        "#pathEdit {"
+        "  color: white;"
+        "  background: rgba(0, 26, 58, 140);"
+        "  border: 1px solid rgba(255, 255, 255, 80);"
+        "  border-radius: 6px;"
+        "  padding: 4px 10px;"
         "}"
         "#systemIcon {"
         "  background: rgba(255, 255, 255, 65);"
@@ -231,7 +387,11 @@ void MainWindow::buildUi() {
     connect(loginButton, &QPushButton::clicked, this, [this] { login(); });
     connect(passwordEdit_, &QLineEdit::returnPressed, this, [this] { login(); });
     connect(formatButton, &QPushButton::clicked, this, [this] { formatVolume(); });
+    connect(registerButton, &QPushButton::clicked, this, [this] { showRegisterPage(); });
     connect(exitLoginButton, &QPushButton::clicked, this, [this] { close(); });
+    connect(regSubmitButton, &QPushButton::clicked, this, [this] { registerUser(); });
+    connect(regConfirmEdit_, &QLineEdit::returnPressed, this, [this] { registerUser(); });
+    connect(backToLoginButton, &QPushButton::clicked, this, [this] { showLoginPage(); });
     connect(systemIcon_, &QLabel::customContextMenuRequested, this, [this](const QPoint& pos) {
         showSystemMenu(pos);
     });
@@ -239,7 +399,28 @@ void MainWindow::buildUi() {
         showIconMenu(desktopList_, desktopPath(), pos);
     });
     connect(desktopList_, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem* item) {
-        openEntryIn(desktopPath(), item);
+        if (!requireLogin()) {
+            return;
+        }
+        if (itemType(item) == vfs::InodeType::Directory) {
+            const QString name = itemName(item);
+            const QString path = childPath(desktopPath(), name);
+            std::string message;
+            if (fs_.changeDirectoryTo(toStdString(path), message)) {
+                appendLog(toQString(message));
+                refreshDesktop();
+            } else {
+                QMessageBox::warning(this, QStringLiteral("导航失败"), toQString(message));
+                appendLog(toQString(message));
+            }
+        } else {
+            openEntryIn(desktopPath(), item);
+        }
+    });
+    connect(backButton_, &QPushButton::clicked, this, [this] { navigateBack(); });
+    connect(pathEdit_, &QLineEdit::returnPressed, this, [this] { navigateToPath(); });
+    connect(desktopList_, &FileListWidget::fileDroppedOnDirectory, this, [this](const QString& source, const QString& target) {
+        moveEntryIn(source, target);
     });
 }
 
@@ -261,30 +442,72 @@ void MainWindow::refreshState() {
 }
 
 void MainWindow::refreshDesktop() {
+    updatePathBar();
     populateIconList(desktopList_, desktopPath());
 }
 
 void MainWindow::populateIconList(QListWidget* list, const QString& directoryPath) {
+    if (auto* fileList = qobject_cast<FileListWidget*>(list)) {
+        fileList->setDirectoryPath(directoryPath);
+    }
+    if (list->count() > 0) {
+        QStringList currentOrder;
+        for (int i = 0; i < list->count(); ++i) {
+            currentOrder.append(itemName(list->item(i)));
+        }
+        directoryOrder_[directoryPath] = currentOrder;
+    }
+
     list->clear();
 
     std::string message;
     const auto items = fs_.listDirectoryAt(toStdString(directoryPath), message);
+
+    struct EntryData {
+        QString name;
+        vfs::InodeType type;
+        std::uint32_t inodeNo;
+        std::uint64_t size;
+        std::uint16_t permissions;
+    };
+
+    QList<EntryData> entries;
     for (const auto& item : items) {
         const QString name = toQString(item.name);
         if (isSpecialEntry(name)) {
             continue;
         }
+        entries.append({name, item.type, item.inodeNo, item.size, item.permissions});
+    }
 
-        auto* widgetItem = new QListWidgetItem(entryIcon(item.type), name);
-        widgetItem->setData(Qt::UserRole, name);
-        widgetItem->setData(Qt::UserRole + 1, static_cast<int>(item.type));
-        widgetItem->setData(Qt::UserRole + 2, static_cast<int>(item.permissions));
+    const QStringList savedOrder = directoryOrder_.value(directoryPath);
+    if (!savedOrder.isEmpty()) {
+        QMap<QString, int> orderIndex;
+        for (int i = 0; i < savedOrder.size(); ++i) {
+            orderIndex[savedOrder[i]] = i;
+        }
+
+        std::sort(entries.begin(), entries.end(), [&orderIndex](const EntryData& a, const EntryData& b) {
+            const int ai = orderIndex.value(a.name, std::numeric_limits<int>::max());
+            const int bi = orderIndex.value(b.name, std::numeric_limits<int>::max());
+            if (ai != bi) {
+                return ai < bi;
+            }
+            return a.name < b.name;
+        });
+    }
+
+    for (const auto& entry : entries) {
+        auto* widgetItem = new QListWidgetItem(entryIcon(entry.type), entry.name);
+        widgetItem->setData(Qt::UserRole, entry.name);
+        widgetItem->setData(Qt::UserRole + 1, static_cast<int>(entry.type));
+        widgetItem->setData(Qt::UserRole + 2, static_cast<int>(entry.permissions));
         widgetItem->setToolTip(QStringLiteral("%1\ninode: %2\n大小: %3\n权限: %4 %5")
-            .arg(typeName(item.type))
-            .arg(item.inodeNo)
-            .arg(item.size)
-            .arg(QString::number(item.permissions, 8))
-            .arg(permissionSummary(item.permissions)));
+            .arg(typeName(entry.type))
+            .arg(entry.inodeNo)
+            .arg(entry.size)
+            .arg(QString::number(entry.permissions, 8))
+            .arg(permissionSummary(entry.permissions)));
         list->addItem(widgetItem);
     }
 
@@ -323,6 +546,48 @@ void MainWindow::logout() {
     fs_.logoutUser(message);
     appendLog(toQString(message));
     refreshState();
+}
+
+void MainWindow::registerUser() {
+    const QString username = regUserEdit_->text().trimmed();
+    const QString password = regPasswordEdit_->text();
+    const QString confirm = regConfirmEdit_->text();
+
+    if (username.isEmpty() || password.isEmpty() || confirm.isEmpty()) {
+        QMessageBox::warning(this, QStringLiteral("注册失败"), QStringLiteral("所有字段均不能为空。"));
+        statusBar()->showMessage(QStringLiteral("注册失败：所有字段均不能为空。"));
+        return;
+    }
+
+    if (password != confirm) {
+        QMessageBox::warning(this, QStringLiteral("注册失败"), QStringLiteral("两次输入的密码不一致。"));
+        statusBar()->showMessage(QStringLiteral("注册失败：两次输入的密码不一致。"));
+        return;
+    }
+
+    std::string message;
+    if (fs_.registerUser(toStdString(username), toStdString(password), message)) {
+        QMessageBox::information(this, QStringLiteral("注册成功"), toQString(message));
+        statusBar()->showMessage(toQString(message));
+        regUserEdit_->clear();
+        regPasswordEdit_->clear();
+        regConfirmEdit_->clear();
+        showLoginPage();
+        userEdit_->setText(username);
+    } else {
+        QMessageBox::warning(this, QStringLiteral("注册失败"), toQString(message));
+        statusBar()->showMessage(toQString(message));
+    }
+}
+
+void MainWindow::showRegisterPage() {
+    pages_->setCurrentWidget(registerPage_);
+    regUserEdit_->setFocus();
+}
+
+void MainWindow::showLoginPage() {
+    pages_->setCurrentWidget(loginPage_);
+    userEdit_->setFocus();
 }
 
 void MainWindow::formatVolume() {
@@ -367,7 +632,20 @@ void MainWindow::showIconMenu(QListWidget* list, const QString& directoryPath, c
 
         QAction* chosen = menu.exec(list->viewport()->mapToGlobal(pos));
         if (chosen == openAction) {
-            openEntryIn(directoryPath, clickedItem);
+            if (list == desktopList_ && itemType(clickedItem) == vfs::InodeType::Directory) {
+                const QString name = itemName(clickedItem);
+                const QString path = childPath(directoryPath, name);
+                std::string message;
+                if (fs_.changeDirectoryTo(toStdString(path), message)) {
+                    appendLog(toQString(message));
+                    refreshDesktop();
+                } else {
+                    QMessageBox::warning(this, QStringLiteral("导航失败"), toQString(message));
+                    appendLog(toQString(message));
+                }
+            } else {
+                openEntryIn(directoryPath, clickedItem);
+            }
         } else if (chosen == deleteAction) {
             deleteEntryIn(directoryPath, clickedItem);
         } else if (chosen == refreshAction) {
@@ -433,6 +711,27 @@ void MainWindow::deleteEntryIn(const QString& directoryPath, QListWidgetItem* it
     fs_.deleteAt(toStdString(childPath(directoryPath, name)), message);
     appendLog(toQString(message));
     refreshDesktop();
+}
+
+void MainWindow::moveEntryIn(const QString& sourceName, const QString& targetDirName) {
+    if (!requireLogin()) {
+        return;
+    }
+
+    const QString directoryPath = desktopPath();
+    const QString sourcePath = childPath(directoryPath, sourceName);
+    const QString destDirPath = childPath(directoryPath, targetDirName);
+
+    std::string message;
+    if (fs_.moveAt(toStdString(sourcePath), toStdString(destDirPath), message)) {
+        directoryOrder_.remove(destDirPath);
+        appendLog(toQString(message));
+        refreshDesktop();
+    } else {
+        QMessageBox::warning(this, QStringLiteral("移动失败"), toQString(message));
+        appendLog(toQString(message));
+        refreshDesktop();
+    }
 }
 
 void MainWindow::openEntryIn(const QString& directoryPath, QListWidgetItem* item) {
@@ -612,4 +911,60 @@ QString MainWindow::permissionSummary(std::uint16_t permissions) const {
         text += (value & 1) ? QStringLiteral("x") : QStringLiteral("-");
     }
     return QStringLiteral("(") + text + QStringLiteral(")");
+}
+
+bool MainWindow::isAtUserHome() const {
+    const QString path = desktopPath();
+    for (int i = 1; i <= static_cast<int>(vfs::kUserCount); ++i) {
+        if (path == QStringLiteral("/usr%1").arg(i)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void MainWindow::updatePathBar() {
+    if (!pathEdit_) {
+        return;
+    }
+    const QString currentPath = desktopPath();
+    pathEdit_->setText(currentPath);
+    pathEdit_->setCursorPosition(0);
+    if (backButton_) {
+        backButton_->setVisible(!isAtUserHome());
+    }
+}
+
+void MainWindow::navigateBack() {
+    if (!requireLogin()) {
+        return;
+    }
+    std::string message;
+    if (!fs_.changeDirectoryTo("..", message)) {
+        QMessageBox::warning(this, QStringLiteral("导航失败"), toQString(message));
+        appendLog(toQString(message));
+        return;
+    }
+    appendLog(toQString(message));
+    refreshDesktop();
+}
+
+void MainWindow::navigateToPath() {
+    if (!requireLogin()) {
+        return;
+    }
+    const QString target = pathEdit_->text().trimmed();
+    if (target.isEmpty()) {
+        refreshDesktop();
+        return;
+    }
+    std::string message;
+    if (!fs_.changeDirectoryTo(toStdString(target), message)) {
+        QMessageBox::warning(this, QStringLiteral("路径无效"), toQString(message));
+        appendLog(toQString(message));
+        pathEdit_->setText(desktopPath());
+        return;
+    }
+    appendLog(toQString(message));
+    refreshDesktop();
 }

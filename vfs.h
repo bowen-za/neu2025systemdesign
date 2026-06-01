@@ -13,14 +13,16 @@ namespace vfs {
 constexpr std::uint32_t kBlockSize = 512;
 constexpr std::uint32_t kInodeBlocks = 32;
 constexpr std::uint32_t kDataBlocks = 512;
+constexpr std::uint32_t kUserBlocks = 2;
 constexpr std::uint32_t kBootBlock = 0;
-constexpr std::uint32_t kSuperBlockNo = 1;
-constexpr std::uint32_t kInodeStartBlock = 2;
+constexpr std::uint32_t kSuperBlockNo = kBootBlock + kUserBlocks;
+constexpr std::uint32_t kInodeStartBlock = kSuperBlockNo + 1;
 constexpr std::uint32_t kDataStartBlock = kInodeStartBlock + kInodeBlocks;
 constexpr std::uint32_t kTotalBlocks = kDataStartBlock + kDataBlocks;
 constexpr std::uint32_t kMagic = 0x56465331;
 
 constexpr std::uint32_t kUserCount = 8;
+constexpr std::uint32_t kMaxUserCount = kUserCount * kUserBlocks;
 constexpr std::uint32_t kNicFree = 50;
 constexpr std::uint32_t kNicInode = 50;
 constexpr std::uint32_t kNAddr = 10;
@@ -181,10 +183,12 @@ public:
     std::string currentUserName() const;
     std::string currentDirectoryPath() const;
     bool loginUser(const std::string& username, const std::string& password, std::string& message);
+    bool registerUser(const std::string& username, const std::string& password, std::string& message);
     bool logoutUser(std::string& message);
     bool createFileAt(const std::string& path, std::string& message);
     bool createDirectoryAt(const std::string& path, std::string& message);
     bool deleteAt(const std::string& path, std::string& message);
+    bool moveAt(const std::string& sourcePath, const std::string& destinationDirectoryPath, std::string& message);
     bool changeDirectoryTo(const std::string& path, std::string& message);
     std::vector<DirectoryViewItem> listDirectoryAt(const std::string& path, std::string& message) const;
     bool openFileAt(const std::string& path, OpenMode mode, int& fd, std::string& message);
