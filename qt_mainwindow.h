@@ -51,6 +51,8 @@ private:
     void showLoginPage();
     void formatVolume();
     void showSystemMenu(const QPoint& pos);
+    void showBlockAllocationDialog();
+    void showUserStorageDialog();
     void navigateBack();
     void navigateToPath();
 

@@ -1,7 +1,9 @@
 #include "vfs.h"
 
 #include <cstring>
+#include <functional>
 #include <iostream>
+#include <set>
 #include <sstream>
 
 namespace vfs {
@@ -237,6 +239,149 @@ void FileSystem::bfreeInternal(std::uint32_t blockNo) {
     }
 
     flushSuper();
+}
+
+BlockAllocationInfo FileSystem::blockAllocationInfo() const {
+    BlockAllocationInfo info;
+    info.blockSize = kBlockSize;
+    info.dataStartBlock = super_.dataStartBlock;
+    info.totalDataBlocks = super_.dataBlocks;
+    info.freeStackCount = super_.freeBlockCount;
+
+    std::set<std::uint32_t> freeSet;
+    std::set<std::uint32_t> currentStackSet;
+    std::set<std::uint32_t> visitedLeaders;
+
+    auto isDataBlock = [](std::uint32_t blockNo) {
+        return blockNo >= kDataStartBlock && blockNo < kDataStartBlock + kDataBlocks;
+    };
+
+    auto rememberFree = [&](std::uint32_t blockNo) {
+        if (isDataBlock(blockNo) && blockNo != 0) {
+            freeSet.insert(blockNo);
+        }
+    };
+
+    for (std::uint32_t i = 0; i < super_.freeBlockCount && i < kNicFree; ++i) {
+        const std::uint32_t blockNo = super_.freeBlockStack[i];
+        rememberFree(blockNo);
+        if (isDataBlock(blockNo) && blockNo != 0) {
+            currentStackSet.insert(blockNo);
+        }
+    }
+
+    std::function<void(std::uint32_t, const std::uint32_t*)> walkGroupChain =
+        [&](std::uint32_t count, const std::uint32_t* stack) {
+        if (count == 0 || count > kNicFree) {
+            return;
+        }
+
+        for (std::uint32_t i = 0; i < count; ++i) {
+            rememberFree(stack[i]);
+        }
+
+        const std::uint32_t leader = stack[0];
+        if (!isDataBlock(leader) || leader == 0 || visitedLeaders.count(leader) > 0) {
+            return;
+        }
+
+        visitedLeaders.insert(leader);
+        rememberFree(leader);
+
+        GroupBlock group{};
+        disk_.readStruct(leader, group);
+        if (group.count > kNicFree) {
+            return;
+        }
+
+        walkGroupChain(group.count, group.blocks);
+    };
+
+    walkGroupChain(super_.freeBlockCount, super_.freeBlockStack);
+
+    info.groupLeaderBlocks.assign(visitedLeaders.begin(), visitedLeaders.end());
+    info.currentStackBlocks.assign(currentStackSet.begin(), currentStackSet.end());
+    info.freeBlockNumbers.assign(freeSet.begin(), freeSet.end());
+
+    for (std::uint32_t blockNo = kDataStartBlock; blockNo < kDataStartBlock + kDataBlocks; ++blockNo) {
+        if (freeSet.count(blockNo) == 0) {
+            info.usedBlockNumbers.push_back(blockNo);
+        }
+    }
+
+    info.freeBlocks = static_cast<std::uint32_t>(info.freeBlockNumbers.size());
+    info.usedBlocks = static_cast<std::uint32_t>(info.usedBlockNumbers.size());
+    return info;
+}
+
+UserStorageInfo FileSystem::userStorageInfo() const {
+    UserStorageInfo info;
+    info.blockSize = kBlockSize;
+    if (!session_.loggedIn || session_.homeInode == kInvalidInode) {
+        return info;
+    }
+
+    info.username = session_.username;
+    info.homePath = "/" + session_.username;
+
+    std::set<std::uint32_t> visitedInodes;
+
+    auto countAllocatedBlocks = [](const DiskInode& inode) {
+        std::uint32_t count = 0;
+        for (std::uint32_t i = 0; i < kNAddr; ++i) {
+            if (inode.direct[i] != 0) {
+                ++count;
+            }
+        }
+        return count;
+    };
+
+    std::function<void(std::uint32_t)> walk = [&](std::uint32_t inodeNo) {
+        if (inodeNo == kInvalidInode || visitedInodes.count(inodeNo) > 0) {
+            return;
+        }
+        visitedInodes.insert(inodeNo);
+
+        const DiskInode inode = readInode(inodeNo);
+        if (!inode.used) {
+            return;
+        }
+
+        const std::uint32_t blocks = countAllocatedBlocks(inode);
+        info.allocatedBlocks += blocks;
+        info.allocatedBytes += static_cast<std::uint64_t>(blocks) * kBlockSize;
+        info.actualBytes += inode.size;
+
+        const InodeType type = static_cast<InodeType>(inode.type);
+        if (type == InodeType::File) {
+            ++info.fileCount;
+            info.fileBytes += inode.size;
+            return;
+        }
+
+        if (type != InodeType::Directory) {
+            return;
+        }
+
+        ++info.directoryCount;
+        info.directoryBytes += inode.size;
+
+        std::vector<DirEntry> entries;
+        if (!readDirectoryEntries(inodeNo, entries)) {
+            return;
+        }
+
+        for (const auto& entry : entries) {
+            const std::string name = readName(entry.name, sizeof(entry.name));
+            if (entry.inode == kInvalidInode || name == "." || name == "..") {
+                continue;
+            }
+            walk(entry.inode);
+        }
+    };
+
+    walk(session_.homeInode);
+    return info;
 }
 
 void FileSystem::rebuildFreeInodeStack() {

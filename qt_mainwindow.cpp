@@ -10,6 +10,7 @@
 #include <QDialogButtonBox>
 #include <QDropEvent>
 #include <QFrame>
+#include <QFont>
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QInputDialog>
@@ -19,13 +20,16 @@
 #include <QListWidgetItem>
 #include <QMenu>
 #include <QMessageBox>
+#include <QPainter>
 #include <QPushButton>
 #include <QPixmap>
+#include <QProgressBar>
 #include <QStackedWidget>
 #include <QStatusBar>
 #include <QStyle>
 #include <QTextEdit>
 #include <QVBoxLayout>
+#include <QWidget>
 
 namespace {
 
@@ -60,6 +64,178 @@ QIcon entryIcon(vfs::InodeType type) {
 bool isSpecialEntry(const QString& name) {
     return name == QStringLiteral(".") || name == QStringLiteral("..");
 }
+
+bool containsBlock(const std::vector<std::uint32_t>& blocks, std::uint32_t blockNo) {
+    return std::find(blocks.begin(), blocks.end(), blockNo) != blocks.end();
+}
+
+QString formatBytes(std::uint64_t bytes) {
+    constexpr double kKiB = 1024.0;
+    constexpr double kMiB = 1024.0 * 1024.0;
+    if (bytes >= static_cast<std::uint64_t>(kMiB)) {
+        return QString::number(static_cast<double>(bytes) / kMiB, 'f', 2) + QStringLiteral(" MB");
+    }
+    if (bytes >= static_cast<std::uint64_t>(kKiB)) {
+        return QString::number(static_cast<double>(bytes) / kKiB, 'f', 2) + QStringLiteral(" KB");
+    }
+    return QString::number(bytes) + QStringLiteral(" B");
+}
+
+QString percentText(std::uint64_t part, std::uint64_t total) {
+    if (total == 0) {
+        return QStringLiteral("0.0%");
+    }
+    return QString::number(static_cast<double>(part) * 100.0 / static_cast<double>(total), 'f', 1)
+        + QStringLiteral("%");
+}
+
+class DiskBlockChart : public QWidget {
+public:
+    explicit DiskBlockChart(const vfs::BlockAllocationInfo& info, QWidget* parent = nullptr)
+        : QWidget(parent), info_(info) {
+        setMinimumSize(760, 360);
+        setMouseTracking(true);
+    }
+
+protected:
+    void paintEvent(QPaintEvent*) override {
+        QPainter painter(this);
+        painter.setRenderHint(QPainter::Antialiasing, true);
+        painter.fillRect(rect(), QColor(248, 252, 255));
+
+        const int columns = 32;
+        const int rows = static_cast<int>((info_.totalDataBlocks + columns - 1) / columns);
+        const int margin = 18;
+        const int gap = 3;
+        const int availableW = width() - margin * 2;
+        const int availableH = height() - margin * 2;
+        const int cellW = (availableW - (columns - 1) * gap) / columns;
+        const int cellH = (availableH - (rows - 1) * gap) / rows;
+        const int cell = std::max(5, std::min(cellW, cellH));
+
+        for (std::uint32_t i = 0; i < info_.totalDataBlocks; ++i) {
+            const std::uint32_t blockNo = info_.dataStartBlock + i;
+            const int col = static_cast<int>(i % columns);
+            const int row = static_cast<int>(i / columns);
+            const QRect r(margin + col * (cell + gap), margin + row * (cell + gap), cell, cell);
+
+            QColor color(246, 178, 74);
+            if (containsBlock(info_.freeBlockNumbers, blockNo)) {
+                color = QColor(86, 196, 170);
+            }
+            if (containsBlock(info_.currentStackBlocks, blockNo)) {
+                color = QColor(46, 142, 255);
+            }
+            if (containsBlock(info_.groupLeaderBlocks, blockNo)) {
+                color = QColor(28, 92, 176);
+            }
+
+            painter.setPen(QColor(255, 255, 255, 210));
+            painter.setBrush(color);
+            painter.drawRoundedRect(r, 2, 2);
+        }
+    }
+
+private:
+    vfs::BlockAllocationInfo info_;
+};
+
+class UserStorageChart : public QWidget {
+public:
+    explicit UserStorageChart(const vfs::UserStorageInfo& info, QWidget* parent = nullptr)
+        : QWidget(parent), info_(info) {
+        setMinimumSize(760, 260);
+    }
+
+protected:
+    void paintEvent(QPaintEvent*) override {
+        QPainter painter(this);
+        painter.setRenderHint(QPainter::Antialiasing, true);
+        painter.fillRect(rect(), QColor(248, 252, 255));
+
+        const int margin = 26;
+        const QRect barRect(margin, 86, width() - margin * 2, 34);
+        const std::uint64_t total = std::max<std::uint64_t>(info_.allocatedBytes, 1);
+        const std::uint64_t actual = std::min(info_.actualBytes, total);
+        const std::uint64_t fileBytes = std::min(info_.fileBytes, actual);
+        const std::uint64_t dirBytes = std::min(info_.directoryBytes, actual - fileBytes);
+        auto widthFor = [&](std::uint64_t value) {
+            return static_cast<int>(static_cast<double>(value) / static_cast<double>(total) * barRect.width());
+        };
+
+        painter.setPen(QColor(40, 52, 68));
+        QFont titleFont = painter.font();
+        titleFont.setPointSize(12);
+        titleFont.setBold(true);
+        painter.setFont(titleFont);
+        painter.drawText(QRect(margin, 22, width() - margin * 2, 28),
+                         Qt::AlignLeft | Qt::AlignVCenter,
+                         QStringLiteral("用户存储空间占用"));
+
+        painter.setFont(QFont());
+        painter.setPen(QColor(82, 95, 112));
+        painter.drawText(QRect(margin, 50, width() - margin * 2, 24),
+                         Qt::AlignLeft | Qt::AlignVCenter,
+                         QStringLiteral("分配空间 %1，实际使用 %2，占用率 %3")
+                             .arg(formatBytes(info_.allocatedBytes))
+                             .arg(formatBytes(info_.actualBytes))
+                             .arg(percentText(info_.actualBytes, info_.allocatedBytes)));
+
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(QColor(227, 233, 240));
+        painter.drawRoundedRect(barRect, 8, 8);
+
+        int x = barRect.x();
+        const int fileW = widthFor(fileBytes);
+        const int dirW = widthFor(dirBytes);
+        const int slackW = std::max(0, barRect.width() - widthFor(actual));
+
+        if (fileW > 0) {
+            painter.setBrush(QColor(61, 142, 255));
+            painter.drawRoundedRect(QRect(x, barRect.y(), fileW, barRect.height()), 8, 8);
+            x += fileW;
+        }
+        if (dirW > 0) {
+            painter.setBrush(QColor(86, 196, 170));
+            painter.drawRect(QRect(x, barRect.y(), dirW, barRect.height()));
+            x += dirW;
+        }
+        if (slackW > 0) {
+            painter.setBrush(QColor(246, 178, 74));
+            painter.drawRoundedRect(QRect(barRect.right() - slackW + 1, barRect.y(), slackW, barRect.height()), 8, 8);
+        }
+
+        painter.setPen(QColor(40, 52, 68));
+        painter.drawText(QRect(margin, 132, width() - margin * 2, 24),
+                         Qt::AlignLeft | Qt::AlignVCenter,
+                         QStringLiteral("蓝色=文件内容  绿色=目录项记录  橙色=块内未使用空间"));
+
+        const int cardW = (width() - margin * 2 - 24) / 3;
+        const int y = 168;
+        auto drawCard = [&](int index, const QString& label, const QString& value, const QColor& color) {
+            const QRect card(margin + index * (cardW + 12), y, cardW, 58);
+            painter.setPen(QColor(220, 227, 235));
+            painter.setBrush(QColor(255, 255, 255));
+            painter.drawRoundedRect(card, 8, 8);
+            painter.setPen(color);
+            QFont valueFont = painter.font();
+            valueFont.setBold(true);
+            valueFont.setPointSize(11);
+            painter.setFont(valueFont);
+            painter.drawText(card.adjusted(12, 8, -12, -28), Qt::AlignLeft | Qt::AlignVCenter, value);
+            painter.setFont(QFont());
+            painter.setPen(QColor(96, 110, 128));
+            painter.drawText(card.adjusted(12, 30, -12, -8), Qt::AlignLeft | Qt::AlignVCenter, label);
+        };
+
+        drawCard(0, QStringLiteral("已分配数据块"), QStringLiteral("%1 块").arg(info_.allocatedBlocks), QColor(46, 101, 190));
+        drawCard(1, QStringLiteral("文件数量"), QStringLiteral("%1 个").arg(info_.fileCount), QColor(34, 132, 116));
+        drawCard(2, QStringLiteral("目录数量"), QStringLiteral("%1 个").arg(info_.directoryCount), QColor(185, 110, 30));
+    }
+
+private:
+    vfs::UserStorageInfo info_;
+};
 
 }  // namespace
 
@@ -602,6 +778,8 @@ void MainWindow::formatVolume() {
 void MainWindow::showSystemMenu(const QPoint& pos) {
     QMenu menu(this);
     QAction* formatAction = menu.addAction(QStringLiteral("格式化"));
+    QAction* blockChartAction = menu.addAction(QStringLiteral("磁盘块图表"));
+    QAction* storageChartAction = menu.addAction(QStringLiteral("用户空间图表"));
     menu.addSeparator();
     QAction* logoutAction = menu.addAction(QStringLiteral("注销"));
     QAction* exitAction = menu.addAction(QStringLiteral("退出"));
@@ -609,11 +787,147 @@ void MainWindow::showSystemMenu(const QPoint& pos) {
     QAction* chosen = menu.exec(systemIcon_->mapToGlobal(pos));
     if (chosen == formatAction) {
         formatVolume();
+    } else if (chosen == blockChartAction) {
+        showBlockAllocationDialog();
+    } else if (chosen == storageChartAction) {
+        showUserStorageDialog();
     } else if (chosen == logoutAction) {
         logout();
     } else if (chosen == exitAction) {
         close();
     }
+}
+
+void MainWindow::showBlockAllocationDialog() {
+    if (!requireLogin()) {
+        return;
+    }
+
+    const vfs::BlockAllocationInfo info = fs_.blockAllocationInfo();
+    auto* dialog = new QDialog(this);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    dialog->setWindowTitle(QStringLiteral("空闲磁盘块分配与回收图表"));
+    dialog->resize(920, 680);
+
+    auto* root = new QVBoxLayout(dialog);
+    auto* summary = new QLabel(QStringLiteral(
+        "当前用户: %1    当前目录: %2\n"
+        "数据区起始块: %3    数据块总数: %4    块大小: %5 B\n"
+        "已分配块: %6    空闲块: %7    当前超级块空闲栈项数: %8    成组链接组长块数: %9")
+        .arg(toQString(fs_.currentUserName()))
+        .arg(desktopPath())
+        .arg(info.dataStartBlock)
+        .arg(info.totalDataBlocks)
+        .arg(info.blockSize)
+        .arg(info.usedBlocks)
+        .arg(info.freeBlocks)
+        .arg(info.freeStackCount)
+        .arg(info.groupLeaderBlocks.size()));
+    summary->setTextInteractionFlags(Qt::TextSelectableByMouse);
+
+    auto* progress = new QProgressBar;
+    progress->setRange(0, static_cast<int>(info.totalDataBlocks));
+    progress->setValue(static_cast<int>(info.usedBlocks));
+    progress->setFormat(QStringLiteral("已分配 %v / %m 个数据块 (%p%)"));
+
+    auto* legend = new QLabel(QStringLiteral(
+        "颜色说明: 橙色=已分配块    绿色=空闲块    亮蓝=当前超级块空闲栈中的块    深蓝=成组链接组长块\n"
+        "说明: 分配时从超级块空闲栈弹出块；回收时压回空闲栈；空闲栈满时写入组长块，形成成组链接。"));
+    legend->setWordWrap(true);
+
+    auto* chart = new DiskBlockChart(info);
+
+    auto joinBlocks = [](const std::vector<std::uint32_t>& blocks) {
+        QStringList parts;
+        const int limit = std::min<int>(static_cast<int>(blocks.size()), 30);
+        for (int i = 0; i < limit; ++i) {
+            parts << QString::number(blocks[static_cast<std::size_t>(i)]);
+        }
+        if (static_cast<int>(blocks.size()) > limit) {
+            parts << QStringLiteral("...");
+        }
+        return parts.join(QStringLiteral(", "));
+    };
+
+    auto* details = new QTextEdit;
+    details->setReadOnly(true);
+    details->setMaximumHeight(130);
+    details->setPlainText(QStringLiteral(
+        "当前空闲块栈: [%1]\n"
+        "成组链接组长块: [%2]\n"
+        "最近可用于分配的空闲块会优先显示在当前空闲块栈中；删除文件或缩短文件内容后，释放的数据块会回收到该结构中。")
+        .arg(joinBlocks(info.currentStackBlocks))
+        .arg(joinBlocks(info.groupLeaderBlocks)));
+
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Close);
+    connect(buttons, &QDialogButtonBox::rejected, dialog, &QDialog::close);
+
+    root->addWidget(summary);
+    root->addWidget(progress);
+    root->addWidget(legend);
+    root->addWidget(chart, 1);
+    root->addWidget(details);
+    root->addWidget(buttons);
+    dialog->show();
+}
+
+void MainWindow::showUserStorageDialog() {
+    if (!requireLogin()) {
+        return;
+    }
+
+    const vfs::UserStorageInfo info = fs_.userStorageInfo();
+    const std::uint64_t slackBytes = info.allocatedBytes > info.actualBytes
+        ? info.allocatedBytes - info.actualBytes : 0;
+
+    auto* dialog = new QDialog(this);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    dialog->setWindowTitle(QStringLiteral("用户存储空间占用图表"));
+    dialog->resize(880, 560);
+
+    auto* root = new QVBoxLayout(dialog);
+    auto* summary = new QLabel(QStringLiteral(
+        "当前用户: %1    用户目录: %2\n"
+        "固定块大小: %3 B    已分配空间: %4    实际使用: %5    块内未使用: %6")
+        .arg(toQString(info.username))
+        .arg(toQString(info.homePath))
+        .arg(info.blockSize)
+        .arg(formatBytes(info.allocatedBytes))
+        .arg(formatBytes(info.actualBytes))
+        .arg(formatBytes(slackBytes)));
+    summary->setTextInteractionFlags(Qt::TextSelectableByMouse);
+
+    auto* progress = new QProgressBar;
+    progress->setRange(0, 1000);
+    const int progressValue = info.allocatedBytes == 0 ? 0
+        : static_cast<int>(std::min<std::uint64_t>(1000, info.actualBytes * 1000 / info.allocatedBytes));
+    progress->setValue(progressValue);
+    progress->setFormat(QStringLiteral("实际使用 / 已分配：%p%"));
+
+    auto* chart = new UserStorageChart(info);
+
+    auto* details = new QTextEdit;
+    details->setReadOnly(true);
+    details->setMaximumHeight(130);
+    details->setPlainText(QStringLiteral(
+        "统计范围: 当前登录用户的用户目录及其所有子目录、文件\n"
+        "已分配空间 = 已占用数据块数量 × 固定块大小 = %1 × %2 B\n"
+        "实际使用空间 = 文件内容大小 + 目录项记录大小 = %3 + %4\n"
+        "说明: 普通文件和目录都会至少占用数据块；文件内容不足一个块时，剩余部分属于块内未使用空间。")
+        .arg(info.allocatedBlocks)
+        .arg(info.blockSize)
+        .arg(formatBytes(info.fileBytes))
+        .arg(formatBytes(info.directoryBytes)));
+
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Close);
+    connect(buttons, &QDialogButtonBox::rejected, dialog, &QDialog::close);
+
+    root->addWidget(summary);
+    root->addWidget(progress);
+    root->addWidget(chart, 1);
+    root->addWidget(details);
+    root->addWidget(buttons);
+    dialog->show();
 }
 
 void MainWindow::showIconMenu(QListWidget* list, const QString& directoryPath, const QPoint& pos) {

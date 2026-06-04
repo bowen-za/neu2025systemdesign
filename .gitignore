@@ -13,7 +13,11 @@ compile_commands.json
 *.exe
 *.dll
 *.lib
+*.exp
+*.ilk
+*.manifest
 *.pdb
+*.log
 platforms/
 imageformats/
 iconengines/
@@ -31,11 +35,14 @@ virtual_disk.bin
 # IDE / editor files
 .vscode/
 .idea/
+.vs/
 .qtcreator/
 .qtc_clangd/
+CMakeUserPresets.json
 *.user
 *.suo
 *.cache
+*.autosave
 
 # OS files
 .DS_Store

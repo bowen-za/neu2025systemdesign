@@ -141,6 +141,32 @@ struct DirectoryViewItem {
     InodeType type = InodeType::Free;
 };
 
+struct BlockAllocationInfo {
+    std::uint32_t blockSize = kBlockSize;
+    std::uint32_t dataStartBlock = kDataStartBlock;
+    std::uint32_t totalDataBlocks = kDataBlocks;
+    std::uint32_t freeBlocks = 0;
+    std::uint32_t usedBlocks = 0;
+    std::uint32_t freeStackCount = 0;
+    std::vector<std::uint32_t> freeBlockNumbers;
+    std::vector<std::uint32_t> usedBlockNumbers;
+    std::vector<std::uint32_t> currentStackBlocks;
+    std::vector<std::uint32_t> groupLeaderBlocks;
+};
+
+struct UserStorageInfo {
+    std::string username;
+    std::string homePath;
+    std::uint32_t blockSize = kBlockSize;
+    std::uint32_t allocatedBlocks = 0;
+    std::uint32_t fileCount = 0;
+    std::uint32_t directoryCount = 0;
+    std::uint64_t allocatedBytes = 0;
+    std::uint64_t actualBytes = 0;
+    std::uint64_t fileBytes = 0;
+    std::uint64_t directoryBytes = 0;
+};
+
 std::string trim(const std::string& input);
 bool splitParent(const std::string& path, std::string& parent, std::string& leaf);
 void copyName(char* dest, const std::string& name);
@@ -195,6 +221,8 @@ public:
     bool closeDescriptor(int fd, std::string& message);
     bool writeDescriptor(int fd, const std::string& text, std::string& message);
     bool readDescriptor(int fd, std::string& content, std::string& message);
+    BlockAllocationInfo blockAllocationInfo() const;
+    UserStorageInfo userStorageInfo() const;
     bool save(std::string& message);
 
 private:
