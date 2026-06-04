@@ -1,22 +1,48 @@
 # Build outputs
 build/
+build-*/
+out/
 cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+compile_commands.json
 *.o
 *.obj
 *.exe
 *.dll
 *.lib
+*.exp
+*.ilk
+*.manifest
 *.pdb
+*.log
+platforms/
+imageformats/
+iconengines/
+generic/
+networkinformation/
+styles/
+tls/
+translations/
+.qt/
 
 # Virtual disk / runtime data
 virtual_disk.bin
+*.bin
 
 # IDE / editor files
 .vscode/
 .idea/
+.vs/
+.qtcreator/
+.qtc_clangd/
+CMakeUserPresets.json
 *.user
 *.suo
 *.cache
+*.autosave
 
 # OS files
 .DS_Store

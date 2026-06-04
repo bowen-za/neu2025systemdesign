@@ -1,7 +1,9 @@
-﻿#include "vfs.h"
+#include "vfs.h"
 
 #include <cstring>
+#include <functional>
 #include <iostream>
+#include <set>
 #include <sstream>
 
 namespace vfs {
@@ -96,63 +98,6 @@ bool FileSystem::format() {
     return true;
 }
 
-void FileSystem::run() {
-    bool running = true;
-    while (running) {
-        printMenu();
-        const int choice = readInt("请选择功能: ");
-        std::cout << '\n';
-
-        switch (choice) {
-        case 1:
-            format();
-            break;
-        case 2:
-            login();
-            break;
-        case 3:
-            logout();
-            break;
-        case 4:
-            createFile();
-            break;
-        case 5:
-            openFile();
-            break;
-        case 6:
-            writeFile();
-            break;
-        case 7:
-            readFile();
-            break;
-        case 8:
-            closeFile();
-            break;
-        case 9:
-            deleteFile();
-            break;
-        case 10:
-            makeDirectory();
-            break;
-        case 11:
-            changeDirectory();
-            break;
-        case 12:
-            listDirectory();
-            break;
-        case 13:
-            running = false;
-            shutdown();
-            break;
-        default:
-            std::cout << "无效选项，请重新输入。\n";
-            break;
-        }
-
-        std::cout << '\n';
-    }
-}
-
 void FileSystem::initializeUsers() {
     users_.clear();
     users_.resize(kUserCount);
@@ -170,12 +115,26 @@ void FileSystem::initializeUsers() {
 }
 
 void FileSystem::loadUsers() {
-    users_.resize(kUserCount);
-    disk_.readBytes(kBootBlock * kBlockSize, users_.data(), sizeof(UserRecord) * kUserCount);
+    const std::uint32_t count = (super_.userCount > 0 && super_.userCount <= kMaxUserCount)
+        ? super_.userCount : kUserCount;
+    users_.resize(count);
+    const std::uint32_t readBytes = sizeof(UserRecord) * count;
+    const std::uint32_t userAreaSize = kUserBlocks * kBlockSize;
+    const std::uint32_t readSize = (readBytes < userAreaSize) ? readBytes : userAreaSize;
+    disk_.readBytes(kBootBlock * kBlockSize, users_.data(), readSize);
 }
 
 void FileSystem::writeUsers() {
-    disk_.writeBytes(kBootBlock * kBlockSize, users_.data(), sizeof(UserRecord) * kUserCount);
+    const std::uint32_t writeBytes = sizeof(UserRecord) * users_.size();
+    const std::uint32_t userAreaSize = kUserBlocks * kBlockSize;
+    const std::uint32_t writeSize = (writeBytes < userAreaSize) ? writeBytes : userAreaSize;
+    disk_.writeBytes(kBootBlock * kBlockSize, users_.data(), writeSize);
+    const std::uint32_t usedBlocks = (writeSize + kBlockSize - 1) / kBlockSize;
+    for (std::uint32_t b = kBootBlock + usedBlocks; b < kSuperBlockNo; ++b) {
+        disk_.zeroBlock(b);
+    }
+    super_.userCount = static_cast<std::uint32_t>(users_.size());
+    flushSuper();
 }
 
 void FileSystem::createUserHomes() {
@@ -282,6 +241,149 @@ void FileSystem::bfreeInternal(std::uint32_t blockNo) {
     flushSuper();
 }
 
+BlockAllocationInfo FileSystem::blockAllocationInfo() const {
+    BlockAllocationInfo info;
+    info.blockSize = kBlockSize;
+    info.dataStartBlock = super_.dataStartBlock;
+    info.totalDataBlocks = super_.dataBlocks;
+    info.freeStackCount = super_.freeBlockCount;
+
+    std::set<std::uint32_t> freeSet;
+    std::set<std::uint32_t> currentStackSet;
+    std::set<std::uint32_t> visitedLeaders;
+
+    auto isDataBlock = [](std::uint32_t blockNo) {
+        return blockNo >= kDataStartBlock && blockNo < kDataStartBlock + kDataBlocks;
+    };
+
+    auto rememberFree = [&](std::uint32_t blockNo) {
+        if (isDataBlock(blockNo) && blockNo != 0) {
+            freeSet.insert(blockNo);
+        }
+    };
+
+    for (std::uint32_t i = 0; i < super_.freeBlockCount && i < kNicFree; ++i) {
+        const std::uint32_t blockNo = super_.freeBlockStack[i];
+        rememberFree(blockNo);
+        if (isDataBlock(blockNo) && blockNo != 0) {
+            currentStackSet.insert(blockNo);
+        }
+    }
+
+    std::function<void(std::uint32_t, const std::uint32_t*)> walkGroupChain =
+        [&](std::uint32_t count, const std::uint32_t* stack) {
+        if (count == 0 || count > kNicFree) {
+            return;
+        }
+
+        for (std::uint32_t i = 0; i < count; ++i) {
+            rememberFree(stack[i]);
+        }
+
+        const std::uint32_t leader = stack[0];
+        if (!isDataBlock(leader) || leader == 0 || visitedLeaders.count(leader) > 0) {
+            return;
+        }
+
+        visitedLeaders.insert(leader);
+        rememberFree(leader);
+
+        GroupBlock group{};
+        disk_.readStruct(leader, group);
+        if (group.count > kNicFree) {
+            return;
+        }
+
+        walkGroupChain(group.count, group.blocks);
+    };
+
+    walkGroupChain(super_.freeBlockCount, super_.freeBlockStack);
+
+    info.groupLeaderBlocks.assign(visitedLeaders.begin(), visitedLeaders.end());
+    info.currentStackBlocks.assign(currentStackSet.begin(), currentStackSet.end());
+    info.freeBlockNumbers.assign(freeSet.begin(), freeSet.end());
+
+    for (std::uint32_t blockNo = kDataStartBlock; blockNo < kDataStartBlock + kDataBlocks; ++blockNo) {
+        if (freeSet.count(blockNo) == 0) {
+            info.usedBlockNumbers.push_back(blockNo);
+        }
+    }
+
+    info.freeBlocks = static_cast<std::uint32_t>(info.freeBlockNumbers.size());
+    info.usedBlocks = static_cast<std::uint32_t>(info.usedBlockNumbers.size());
+    return info;
+}
+
+UserStorageInfo FileSystem::userStorageInfo() const {
+    UserStorageInfo info;
+    info.blockSize = kBlockSize;
+    if (!session_.loggedIn || session_.homeInode == kInvalidInode) {
+        return info;
+    }
+
+    info.username = session_.username;
+    info.homePath = "/" + session_.username;
+
+    std::set<std::uint32_t> visitedInodes;
+
+    auto countAllocatedBlocks = [](const DiskInode& inode) {
+        std::uint32_t count = 0;
+        for (std::uint32_t i = 0; i < kNAddr; ++i) {
+            if (inode.direct[i] != 0) {
+                ++count;
+            }
+        }
+        return count;
+    };
+
+    std::function<void(std::uint32_t)> walk = [&](std::uint32_t inodeNo) {
+        if (inodeNo == kInvalidInode || visitedInodes.count(inodeNo) > 0) {
+            return;
+        }
+        visitedInodes.insert(inodeNo);
+
+        const DiskInode inode = readInode(inodeNo);
+        if (!inode.used) {
+            return;
+        }
+
+        const std::uint32_t blocks = countAllocatedBlocks(inode);
+        info.allocatedBlocks += blocks;
+        info.allocatedBytes += static_cast<std::uint64_t>(blocks) * kBlockSize;
+        info.actualBytes += inode.size;
+
+        const InodeType type = static_cast<InodeType>(inode.type);
+        if (type == InodeType::File) {
+            ++info.fileCount;
+            info.fileBytes += inode.size;
+            return;
+        }
+
+        if (type != InodeType::Directory) {
+            return;
+        }
+
+        ++info.directoryCount;
+        info.directoryBytes += inode.size;
+
+        std::vector<DirEntry> entries;
+        if (!readDirectoryEntries(inodeNo, entries)) {
+            return;
+        }
+
+        for (const auto& entry : entries) {
+            const std::string name = readName(entry.name, sizeof(entry.name));
+            if (entry.inode == kInvalidInode || name == "." || name == "..") {
+                continue;
+            }
+            walk(entry.inode);
+        }
+    };
+
+    walk(session_.homeInode);
+    return info;
+}
+
 void FileSystem::rebuildFreeInodeStack() {
     super_.freeInodeCount = 0;
     for (std::uint32_t i = 1; i < super_.inodeCount && super_.freeInodeCount < kNicInode; ++i) {
@@ -361,47 +463,5 @@ void FileSystem::iput(MemInode* inode) {
     }
 }
 
-
-void FileSystem::printMenu() const {
-    std::cout << "==== 模拟 UNIX 文件系统 ====\n";
-    std::cout << "当前用户: " << (session_.loggedIn ? session_.username : "(未登录)") << '\n';
-    std::cout << "当前目录: " << currentPath() << '\n';
-    std::cout << "1. format      2. login       3. logout\n";
-    std::cout << "4. create      5. open        6. write\n";
-    std::cout << "7. read        8. close       9. delete\n";
-    std::cout << "10. mkdir      11. chdir      12. dir\n";
-    std::cout << "13. exit\n";
-}
-
-int FileSystem::readInt(const std::string& prompt) const {
-    while (true) {
-        std::cout << prompt;
-        std::string line;
-        if (!std::getline(std::cin, line)) {
-            return 13;
-        }
-
-        std::stringstream ss(line);
-        int value = 0;
-        if (ss >> value) {
-            return value;
-        }
-        std::cout << "请输入数字。\n";
-    }
-}
-
-std::string FileSystem::readLine(const std::string& prompt) const {
-    std::cout << prompt;
-    std::string line;
-    std::getline(std::cin, line);
-    return trim(line);
-}
-
-void FileSystem::shutdown() {
-    flushSuper();
-    disk_.sync();
-    std::cout << "文件系统状态已保存到 " << kDiskFileName << "。\n";
-    std::cout << "默认账户: usr1~usr8，默认密码: pass1~pass8。\n";
-}
 
 }  // namespace vfs

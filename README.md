@@ -1,146 +1,206 @@
-<<<<<<< HEAD
-# 模拟 UNIX 文件系统课程设计
+# BYSX OS 模拟 UNIX 文件系统
 
-这是一个用 C++ 实现的“多用户、多级目录结构文件系统”的课程设计项目，用一个宿主文件 `virtual_disk.bin` 来模拟磁盘，保存文件系统的全部状态。程序启动后可以进行登录、创建目录、创建文件、读写文件、删除文件、切换目录、列目录等操作，并且支持退出后再次启动时恢复上次的数据。
+BYSX OS 是一个使用 C++ 和 Qt Widgets 实现的操作系统课程设计项目，主题为“多用户、多级目录结构文件系统的设计与实现”。系统使用宿主机上的 `virtual_disk.bin` 作为虚拟磁盘文件，在程序内部模拟 UNIX 风格文件系统的超级块、inode 区、数据块区、目录项、用户登录、权限控制、打开文件表以及空闲块分配与回收。
 
-## 项目目标
+系统名称 BYSX OS 来自项目成员张博文、陈泽岳、曹晟嘉、贺思翔的名字组合，界面采用类 Windows 桌面交互方式。
 
-这个项目的核心目标是模拟 UNIX 文件系统的基本组织方式，而不是依赖真实操作系统文件接口直接做普通文件管理。项目内部实现了：
+## 功能特性
 
-1. 超级块 `SuperBlock`
-2. 磁盘 inode 与内存 inode
-3. 目录项 `DirEntry`
-4. 空闲块管理
-5. 用户登录与会话状态
-6. 系统打开文件表与用户打开文件表
-7. 虚拟磁盘持久化
+- Qt 图形化界面，登录后进入类 Windows 桌面。
+- 支持多用户登录，默认用户为 `usr1` 到 `usr8`，密码为 `pass1` 到 `pass8`。
+- 每个用户登录后进入自己的用户目录，例如 `usr1` 进入 `/usr1`。
+- 支持用户注册、注销、退出和格式化虚拟磁盘。
+- 支持多级目录结构，目录和文件以桌面图标形式显示。
+- 支持右键新建目录、新建 `.txt` 文件、打开、删除、刷新等操作。
+- 新建文件必须以 `.txt` 结尾，其他后缀会被拒绝。
+- 支持文件以只读、写入、读写、追加模式打开。
+- 支持文件内容读取、写入和保存。
+- 支持路径栏跳转和回退按钮。
+- 支持拖动桌面图标调整显示顺序。
+- 底部系统图标右键提供格式化、磁盘块图表、用户空间图表、注销和退出。
+- 使用 `virtual_disk.bin` 持久化保存文件卷，下次启动可恢复目录和文件内容。
 
-## 功能列表
+## 默认用户
 
-当前程序支持以下功能：
+格式化后系统会自动创建 8 个默认用户和对应用户目录：
 
-1. `format`：格式化文件系统，重新建立文件卷
-2. `login`：用户登录
-3. `logout`：用户注销
-4. `create`：创建普通文件
-5. `open`：打开文件
-6. `read`：读取文件内容
-7. `write`：向文件写入内容
-8. `close`：关闭文件
-9. `delete`：删除文件或目录
-10. `mkdir`：创建目录
-11. `chdir`：切换当前目录
-12. `dir`：列出目录内容
-13. `exit`：退出并保存状态
-
-## 多用户设计
-
-程序内置了 8 个默认用户：
-
-- `usr1` / `pass1`
-- `usr2` / `pass2`
-- `usr3` / `pass3`
-- `usr4` / `pass4`
-- `usr5` / `pass5`
-- `usr6` / `pass6`
-- `usr7` / `pass7`
-- `usr8` / `pass8`
-
-格式化后会自动创建对应的用户家目录：
-
-- `/usr1`
-- `/usr2`
-- `/usr3`
-- `/usr4`
-- `/usr5`
-- `/usr6`
-- `/usr7`
-- `/usr8`
-
-用户登录后会默认进入自己的家目录，因此不同用户的文件不会默认混在一起。
-
-## 文件结构
-
-项目已经按功能拆分为多个源文件：
-
-- [main.cpp](./main.cpp)：程序入口，只负责初始化和启动主循环
-- [vfs.h](./vfs.h)：公共头文件，包含常量、数据结构和类声明
-- [utils.cpp](./utils.cpp)：字符串工具、控制台编码、用户会话初始化
-- [virtual_disk.cpp](./virtual_disk.cpp)：虚拟磁盘文件的读写与块操作
-- [filesystem_system.cpp](./filesystem_system.cpp)：系统初始化、格式化、超级块、空闲块和 inode 管理
-- [filesystem_user.cpp](./filesystem_user.cpp)：用户登录、注销、家目录定位和权限判断
-- [filesystem_directory.cpp](./filesystem_directory.cpp)：目录项读写、路径解析、创建目录、切换目录和列目录
-- [filesystem_file.cpp](./filesystem_file.cpp)：文件创建、打开、读写、关闭和删除
-- [filesystem_api.cpp](./filesystem_api.cpp)：给图形界面调用的文件系统 API 封装
-- [qt_main.cpp](./qt_main.cpp)：Qt 图形界面程序入口
-- [qt_mainwindow.h](./qt_mainwindow.h)：Qt 主窗口声明
-- [qt_mainwindow.cpp](./qt_mainwindow.cpp)：仿 Windows 文件管理器风格的图形界面实现
-- [CMakeLists.txt](./CMakeLists.txt)：CMake 构建配置
+| 用户名 | 密码 |
+| --- | --- |
+| `usr1` | `pass1` |
+| `usr2` | `pass2` |
+| `usr3` | `pass3` |
+| `usr4` | `pass4` |
+| `usr5` | `pass5` |
+| `usr6` | `pass6` |
+| `usr7` | `pass7` |
+| `usr8` | `pass8` |
 
 ## 虚拟磁盘说明
 
-`virtual_disk.bin` 是程序模拟出来的“磁盘镜像文件”。程序会把超级块、inode、目录、文件内容和用户信息都保存到这个文件里。
+`virtual_disk.bin` 是程序运行时生成的虚拟磁盘镜像文件，不是真实硬盘分区。程序会把用户表、超级块、inode 区、目录项、文件内容和空闲块状态写入这个文件。
 
-如果你想重新开始测试，直接删除 `virtual_disk.bin` 即可。程序下次启动时会重新格式化并建立新的文件卷。
-
-## 编译与运行
-
-### 使用 CMake
-
-```bash
-cmake -S . -B build
-cmake --build build
-```
-
-生成的可执行文件会在 `build` 目录中。
-
-如果本机安装了 Qt5 或 Qt6 Widgets，CMake 会额外生成图形版目标：
-
-```bash
-cmake --build build --target vfs_unix_simulator_qt
-```
-
-图形版界面模仿 Windows 文件管理器布局，包含用户登录区、文件列表、路径栏、工具栏、打开文件 fd 列表、文件内容编辑区和操作日志。
-
-### 直接运行
-
-如果已经有编译好的可执行文件，可以直接运行：
-
-```bash
-./vfs_unix_simulator
-```
-
-在 Windows 下也可以直接双击 `vfs_unix_simulator.exe`。
-
-## 测试流程
-
-一个最常见的测试流程如下：
+虚拟磁盘采用固定块大小：
 
 ```text
-1. 启动程序
-2. 选择 format，或删除 virtual_disk.bin 后重新启动
-3. 登录 usr1 / pass1
-4. 查看 /usr1 目录
-5. 创建文件 notes.txt
-6. open notes.txt，模式选择 rw
-7. write 写入 hello
-8. read 验证内容
-9. logout
-10. 登录 usr2 / pass2
-11. 验证 usr2 默认进入 /usr2，且看不到 usr1 的文件
+块大小: 512B
+数据块数: 512
+inode 区: 32 个块
 ```
 
-## 设计特点
+磁盘布局大致如下：
 
-- 使用菜单式交互，符合课程设计验收习惯
-- 采用 C++ 分文件组织，便于阅读和维护
-- 支持文件系统状态持久化
-- 支持多用户、多级目录和基本权限控制
-- 内部结构接近 UNIX 文件系统的教学模型
+```text
+用户区 / 保留区
+超级块
+inode 区
+数据块区
+```
 
-## 备注
+其中数据块区同时存放目录块和普通文件数据块。`virtual_disk.bin` 属于运行数据，不应提交到 GitHub，已在 `.gitignore` 中排除。
 
-本项目面向操作系统课程设计展示和教学演示，重点是“文件系统工作原理的模拟”，不是完整的真实 UNIX 实现。
-=======
-# neu2025systemdesign
->>>>>>> 9d5fa29138ee6347ba60d1798095a1e2785ff2f4
+## 文件系统机制
+
+项目内部模拟了以下 UNIX 文件系统核心概念：
+
+- **超级块 SuperBlock**：保存文件系统规模、数据区起始块、空闲块栈、空闲 inode 栈等全局信息。
+- **inode**：保存文件类型、属主 UID、权限、大小、链接计数和直接块地址。
+- **目录项 DirEntry**：目录文件由目录项数组组成，每个目录项记录文件名、inode 号和类型。
+- **多级目录**：每个目录默认包含 `.` 和 `..`，分别表示当前目录和父目录。
+- **打开文件表**：系统打开文件表和用户打开文件表共同维护文件打开状态、模式和偏移量。
+- **权限控制**：基础区分属主和非属主的读写权限。
+- **成组链接空闲块管理**：空闲块通过超级块空闲栈和组长块链组织，支持分配和回收。
+
+## 图表功能
+
+登录后右键底部系统图标可以打开两个展示窗口：
+
+### 磁盘块图表
+
+用于展示全局虚拟磁盘数据块分配与回收情况：
+
+- 橙色：已分配块
+- 绿色：空闲块
+- 亮蓝：当前超级块空闲栈中的块
+- 深蓝：成组链接组长块
+
+该图表便于演示空闲块分配时从超级块空闲栈弹出、栈只剩组长块时读取下一组、删除文件或目录时回收数据块的过程。
+
+### 用户空间图表
+
+用于展示当前登录用户的用户目录空间占用情况：
+
+- 已分配空间 = 当前用户目录树占用的数据块数量 × 512B
+- 实际使用空间 = 文件内容大小 + 目录项记录大小
+- 蓝色：文件内容
+- 绿色：目录项记录
+- 橙色：块内未使用空间
+
+例如一个空目录至少包含 `.` 和 `..` 两个目录项，每个目录项 32B，因此空目录的实际目录项记录为 64B，但仍会分配 1 个 512B 数据块。
+
+## 项目结构
+
+| 文件 | 说明 |
+| --- | --- |
+| `vfs.h` | 文件系统常量、磁盘结构体、inode、目录项、用户会话和类声明 |
+| `virtual_disk.cpp` | 虚拟磁盘文件创建、加载、同步和按块读写 |
+| `filesystem_system.cpp` | 初始化、格式化、超级块、空闲块、inode 管理和图表统计 |
+| `filesystem_user.cpp` | 用户初始化、登录、注册、注销、用户目录定位和权限检查 |
+| `filesystem_directory.cpp` | 目录项读写、路径解析、目录创建、切换和移动 |
+| `filesystem_file.cpp` | 文件创建、删除、打开、读写和关闭 |
+| `filesystem_api.cpp` | 面向 Qt 界面的文件系统 API 封装 |
+| `utils.cpp` | 字符串处理、名称拷贝和控制台编码辅助 |
+| `qt_main.cpp` | Qt 程序入口 |
+| `qt_mainwindow.h/.cpp` | 登录页、桌面、右键菜单、文件窗口和图表界面 |
+| `resources.qrc` | Qt 资源文件 |
+| `assets/` | BYSX OS 图标和桌面壁纸 |
+| `CMakeLists.txt` | CMake 构建配置 |
+
+## 构建环境
+
+推荐环境：
+
+- Windows
+- Qt 6.x MinGW 64-bit
+- Qt 自带 CMake 或系统 CMake
+- C++11 或更高标准
+
+使用 Qt Creator 时，打开 `CMakeLists.txt`，选择 Desktop Qt MinGW Kit，然后构建运行即可。
+
+命令行构建示例：
+
+```powershell
+cmake -S . -B build-qt -G "MinGW Makefiles" -DCMAKE_PREFIX_PATH="D:/qt/6.11.1/mingw_64" -DQt6_DIR="D:/qt/6.11.1/mingw_64/lib/cmake/Qt6" -DCMAKE_CXX_COMPILER="D:/qt/Tools/mingw1310_64/bin/g++.exe"
+cmake --build build-qt -j 8
+```
+
+生成程序：
+
+```text
+build-qt/vfs_unix_simulator.exe
+```
+
+如果需要直接双击运行 exe，需要保证 Qt DLL 已部署到 exe 同目录，可使用：
+
+```powershell
+windeployqt --compiler-runtime build-qt\vfs_unix_simulator.exe
+```
+
+## 操作流程
+
+1. 启动程序，进入 BYSX OS 登录界面。
+2. 首次测试可点击格式化，初始化虚拟磁盘和默认用户。
+3. 使用 `usr1 / pass1` 登录。
+4. 登录后进入 `/usr1` 用户桌面。
+5. 在桌面空白处右键，新建目录或 `.txt` 文件。
+6. 右键文件图标，选择打开，再选择打开模式。
+7. 在文件窗口中读取或写入内容。
+8. 右键目录图标，选择打开，进入该目录。
+9. 右键底部系统图标，可查看磁盘块图表、用户空间图表、格式化、注销或退出。
+
+## 测试建议
+
+推荐验收演示流程：
+
+```text
+格式化
+登录 usr1 / pass1
+在 /usr1 新建 notes.txt
+以 rw 模式打开 notes.txt
+写入 hello bysx
+关闭文件窗口
+重新打开 notes.txt 并读取内容
+新建目录 course
+进入 course 后新建 readme.txt
+右键系统图标查看用户空间图表
+右键系统图标查看磁盘块图表
+注销 usr1
+登录 usr2 / pass2
+确认进入 /usr2，默认看不到 usr1 的桌面文件
+退出程序后重新启动
+确认文件系统状态可以从 virtual_disk.bin 恢复
+```
+
+## Git 提交说明
+
+仓库只提交源码、README、Qt 资源文件和项目图片资源。以下内容已通过 `.gitignore` 排除，不应提交：
+
+- `build/`、`build-*`、`cmake-build-*`
+- `*.exe`、`*.dll`、`*.obj`、`*.lib`、`*.pdb`
+- `virtual_disk.bin`、`*.bin`
+- `.qtcreator/`、`.qtc_clangd/`、`.vscode/`、`.idea/`
+- 系统临时文件和 IDE 用户配置
+
+提交前可检查：
+
+```powershell
+git status --short
+git ls-files -ci --exclude-standard
+```
+
+第二条命令如果没有输出，表示没有已被 Git 跟踪的忽略文件。
+
+## 课程设计说明
+
+本项目重点展示文件系统内部机制，而不是调用真实操作系统文件 API 完成文件管理。文件内容、目录结构、用户信息和分配状态都保存在虚拟磁盘中，由程序自行管理。
+
+当前版本采用固定数量直接块地址实现文件存储，未实现完整 UNIX 多级索引；权限控制采用课程设计级别的基础属主/非属主读写判断，适合课程展示、答辩演示和机制讲解。

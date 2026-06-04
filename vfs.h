@@ -13,14 +13,16 @@ namespace vfs {
 constexpr std::uint32_t kBlockSize = 512;
 constexpr std::uint32_t kInodeBlocks = 32;
 constexpr std::uint32_t kDataBlocks = 512;
+constexpr std::uint32_t kUserBlocks = 2;
 constexpr std::uint32_t kBootBlock = 0;
-constexpr std::uint32_t kSuperBlockNo = 1;
-constexpr std::uint32_t kInodeStartBlock = 2;
+constexpr std::uint32_t kSuperBlockNo = kBootBlock + kUserBlocks;
+constexpr std::uint32_t kInodeStartBlock = kSuperBlockNo + 1;
 constexpr std::uint32_t kDataStartBlock = kInodeStartBlock + kInodeBlocks;
 constexpr std::uint32_t kTotalBlocks = kDataStartBlock + kDataBlocks;
 constexpr std::uint32_t kMagic = 0x56465331;
 
 constexpr std::uint32_t kUserCount = 8;
+constexpr std::uint32_t kMaxUserCount = kUserCount * kUserBlocks;
 constexpr std::uint32_t kNicFree = 50;
 constexpr std::uint32_t kNicInode = 50;
 constexpr std::uint32_t kNAddr = 10;
@@ -139,6 +141,32 @@ struct DirectoryViewItem {
     InodeType type = InodeType::Free;
 };
 
+struct BlockAllocationInfo {
+    std::uint32_t blockSize = kBlockSize;
+    std::uint32_t dataStartBlock = kDataStartBlock;
+    std::uint32_t totalDataBlocks = kDataBlocks;
+    std::uint32_t freeBlocks = 0;
+    std::uint32_t usedBlocks = 0;
+    std::uint32_t freeStackCount = 0;
+    std::vector<std::uint32_t> freeBlockNumbers;
+    std::vector<std::uint32_t> usedBlockNumbers;
+    std::vector<std::uint32_t> currentStackBlocks;
+    std::vector<std::uint32_t> groupLeaderBlocks;
+};
+
+struct UserStorageInfo {
+    std::string username;
+    std::string homePath;
+    std::uint32_t blockSize = kBlockSize;
+    std::uint32_t allocatedBlocks = 0;
+    std::uint32_t fileCount = 0;
+    std::uint32_t directoryCount = 0;
+    std::uint64_t allocatedBytes = 0;
+    std::uint64_t actualBytes = 0;
+    std::uint64_t fileBytes = 0;
+    std::uint64_t directoryBytes = 0;
+};
+
 std::string trim(const std::string& input);
 bool splitParent(const std::string& path, std::string& parent, std::string& leaf);
 void copyName(char* dest, const std::string& name);
@@ -176,22 +204,25 @@ class FileSystem {
 public:
     bool initialize();
     bool format();
-    void run();
 
     bool isLoggedIn() const;
     std::string currentUserName() const;
     std::string currentDirectoryPath() const;
     bool loginUser(const std::string& username, const std::string& password, std::string& message);
+    bool registerUser(const std::string& username, const std::string& password, std::string& message);
     bool logoutUser(std::string& message);
     bool createFileAt(const std::string& path, std::string& message);
     bool createDirectoryAt(const std::string& path, std::string& message);
     bool deleteAt(const std::string& path, std::string& message);
+    bool moveAt(const std::string& sourcePath, const std::string& destinationDirectoryPath, std::string& message);
     bool changeDirectoryTo(const std::string& path, std::string& message);
     std::vector<DirectoryViewItem> listDirectoryAt(const std::string& path, std::string& message) const;
     bool openFileAt(const std::string& path, OpenMode mode, int& fd, std::string& message);
     bool closeDescriptor(int fd, std::string& message);
     bool writeDescriptor(int fd, const std::string& text, std::string& message);
     bool readDescriptor(int fd, std::string& content, std::string& message);
+    BlockAllocationInfo blockAllocationInfo() const;
+    UserStorageInfo userStorageInfo() const;
     bool save(std::string& message);
 
 private:
@@ -226,28 +257,11 @@ private:
     bool removeNode(const std::string& path);
     int allocateSystemOpen(OpenMode mode, std::uint32_t inodeNo, std::uint32_t offset);
     int allocateUserFd(int sysIndex);
-    void ensureLoggedIn() const;
-    void printMenu() const;
-    int readInt(const std::string& prompt) const;
-    std::string readLine(const std::string& prompt) const;
     std::string currentPath() const;
     std::string findNameInParent(std::uint32_t parentInode, std::uint32_t childInode) const;
-
-    void login();
-    void logout();
-    void createFile();
-    void makeDirectory();
-    void deleteFile();
-    void changeDirectory();
-    void listDirectory();
-    void openFile();
     bool closeFd(int fd, bool verbose);
-    void closeFile();
     bool readFileContent(std::uint32_t inodeNo, std::vector<char>& content) const;
     bool writeFileContent(std::uint32_t inodeNo, const std::vector<char>& content);
-    void writeFile();
-    void readFile();
-    void shutdown();
 
     VirtualDisk disk_;
     SuperBlock super_{};

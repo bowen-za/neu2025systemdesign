@@ -83,6 +83,111 @@ bool FileSystem::deleteAt(const std::string& path, std::string& message) {
     return ok;
 }
 
+bool FileSystem::moveAt(const std::string& sourcePath, const std::string& destinationDirectoryPath, std::string& message) {
+    if (!session_.loggedIn) {
+        message = "请先登录。";
+        return false;
+    }
+
+    std::string srcParentPath;
+    std::string srcLeaf;
+    if (!splitParent(sourcePath, srcParentPath, srcLeaf)) {
+        message = "源路径不合法。";
+        return false;
+    }
+
+    const std::uint32_t srcParentInode = resolvePath(srcParentPath);
+    const std::uint32_t destDirInode = resolvePath(destinationDirectoryPath);
+
+    if (srcParentInode == kInvalidInode) {
+        message = "源目录不存在。";
+        return false;
+    }
+    if (destDirInode == kInvalidInode) {
+        message = "目标目录不存在。";
+        return false;
+    }
+
+    if (srcParentInode == destDirInode) {
+        message = "不能将文件移动到同一个目录。";
+        return false;
+    }
+
+    const DiskInode destDir = readInode(destDirInode);
+    if (destDir.type != static_cast<std::uint8_t>(InodeType::Directory)) {
+        message = "目标路径不是目录。";
+        return false;
+    }
+    if (!accessAllowed(destDir, true, true)) {
+        message = "没有在目标目录写入的权限。";
+        return false;
+    }
+
+    DirEntry existing{};
+    if (findEntry(destDirInode, srcLeaf, existing)) {
+        message = "目标目录中已存在同名文件。";
+        return false;
+    }
+
+    std::vector<DirEntry> srcEntries;
+    if (!readDirectoryEntries(srcParentInode, srcEntries)) {
+        message = "无法读取源目录。";
+        return false;
+    }
+
+    auto it = std::find_if(srcEntries.begin(), srcEntries.end(), [&](const DirEntry& e) {
+        return readName(e.name, kNameSize) == srcLeaf;
+    });
+    if (it == srcEntries.end()) {
+        message = "源文件不存在。";
+        return false;
+    }
+
+    const DiskInode srcInode = readInode(it->inode);
+    if (!srcInode.used) {
+        message = "源文件无效。";
+        return false;
+    }
+    if (srcInode.type == static_cast<std::uint8_t>(InodeType::Directory)) {
+        message = "暂不支持移动目录。";
+        return false;
+    }
+
+    const DiskInode srcParent = readInode(srcParentInode);
+    if (!accessAllowed(srcParent, true, true)) {
+        message = "没有从源目录移除文件的权限。";
+        return false;
+    }
+
+    const DirEntry movedEntry = *it;
+    srcEntries.erase(it);
+    if (!writeDirectoryEntries(srcParentInode, srcEntries)) {
+        message = "写入源目录失败。";
+        return false;
+    }
+
+    std::vector<DirEntry> destEntries;
+    if (!readDirectoryEntries(destDirInode, destEntries)) {
+        srcEntries.push_back(movedEntry);
+        writeDirectoryEntries(srcParentInode, srcEntries);
+        message = "写入目标目录失败，移动已回滚。";
+        return false;
+    }
+
+    destEntries.push_back(movedEntry);
+    if (!writeDirectoryEntries(destDirInode, destEntries)) {
+        srcEntries.push_back(movedEntry);
+        writeDirectoryEntries(srcParentInode, srcEntries);
+        message = "写入目标目录失败，移动已回滚。";
+        return false;
+    }
+
+    flushSuper();
+    disk_.sync();
+    message = "文件移动成功。";
+    return true;
+}
+
 bool FileSystem::changeDirectoryTo(const std::string& path, std::string& message) {
     if (!session_.loggedIn) {
         message = "请先登录。";
